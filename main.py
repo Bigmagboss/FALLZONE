@@ -57,6 +57,49 @@ while running:
             running = False
 
 
+        if (
+            event.type == pygame.MOUSEBUTTONDOWN
+            and
+            event.button == 1
+        ):
+
+            clicked_position = event.pos
+
+            clicked_hex = pixel_to_axial(
+                clicked_position
+            )
+
+            clicked_inside_play_area = (
+                clicked_position[0]
+                < cfg.PLAY_AREA_WIDTH
+            )
+
+            if (
+                clicked_inside_play_area
+                and
+                is_hex_on_map(
+                    clicked_hex
+                )
+            ):
+
+                clicked_distance = hex_distance(
+                    state.player_position,
+                    clicked_hex,
+                )
+
+                valid_movement = (
+                    1
+                    <= clicked_distance
+                    <= cfg.MAX_MOVE_RANGE
+                )
+
+                if valid_movement:
+
+                    state.move_player_to(
+                        clicked_hex
+                    )
+
+
     # --------------------------------------------------
     # MOUSE / PLAYER HOVER
     # --------------------------------------------------

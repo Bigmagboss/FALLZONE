@@ -14,6 +14,18 @@ class GameState:
             self.player_r,
         )
 
+    def move_player_to(
+            self,
+            destination,
+    ):
+        self.player_q, self.player_r = (
+            destination
+        )
+
+        self.status_message = (
+            f"Moved to {destination}."
+        )
+
 
     def reset(self):
         self.player_q, self.player_r = (
