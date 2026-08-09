@@ -11,6 +11,15 @@ HEX_DIRECTIONS = (
     (0, 1),
 )
 
+HEX_EDGE_NEIGHBORS = (
+    (1, 0),
+    (0, 1),
+    (-1, 1),
+    (-1, 0),
+    (0, -1),
+    (1, -1),
+)
+
 def get_neighbors(hex_position):
     q, r = hex_position
 
@@ -25,6 +34,84 @@ def get_neighbors(hex_position):
         neighbors.append(neighbor)
 
     return neighbors
+
+def hex_distance(hex_a, hex_b):
+    q1, r1 = hex_a
+    q2, r2 = hex_b
+
+    dq = q2 - q1
+    dr = r2 - r1
+
+    return max(
+        abs(dq),
+        abs(dr),
+        abs(dq + dr),
+    )
+
+def hexes_within_range(center, max_distance):
+    center_q, center_r = center
+
+    reachable = set()
+
+    for dq in range(
+        -max_distance,
+        max_distance + 1,
+    ):
+
+        minimum_dr = max(
+            -max_distance,
+            -dq - max_distance,
+        )
+
+        maximum_dr = min(
+            max_distance,
+            -dq + max_distance,
+        )
+
+        for dr in range(
+            minimum_dr,
+            maximum_dr + 1,
+        ):
+
+            hex_position = (
+                center_q + dq,
+                center_r + dr,
+            )
+
+            reachable.add(
+                hex_position
+            )
+
+    return reachable
+
+def axial_to_offset(hex_position):
+    q, r = hex_position
+
+    column = q
+
+    row = (
+        r
+        + (
+            q
+            - (q & 1)
+        ) // 2
+    )
+
+    return (
+        column,
+        row,
+    )
+
+def is_hex_on_map(hex_position):
+    column, row = axial_to_offset(
+        hex_position
+    )
+
+    return (
+        0 <= column < cfg.GRID_COLUMNS
+        and
+        0 <= row < cfg.GRID_ROWS
+    )
 
 def offset_to_axial(column, row):
     q = column

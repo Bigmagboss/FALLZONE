@@ -5,8 +5,11 @@ import settings as cfg
 from game_state import GameState
 
 from hex_grid import (
+    HEX_EDGE_NEIGHBORS,
     axial_to_pixel,
     hex_corners,
+    hexes_within_range,
+    is_hex_on_map,
     offset_to_axial,
 )
 
@@ -50,6 +53,55 @@ while running:
 
         if event.type == pygame.QUIT:
             running = False
+
+
+    # --------------------------------------------------
+    # MOUSE / PLAYER HOVER
+    # --------------------------------------------------
+
+    mouse_position = pygame.mouse.get_pos()
+
+    player_center = axial_to_pixel(
+        state.player_position
+    )
+
+    mouse_dx = (
+        mouse_position[0]
+        - player_center[0]
+    )
+
+    mouse_dy = (
+        mouse_position[1]
+        - player_center[1]
+    )
+
+    mouse_distance_from_player = (
+        mouse_dx * mouse_dx
+        + mouse_dy * mouse_dy
+    ) ** 0.5
+
+    player_is_hovered = (
+        mouse_distance_from_player
+        <= cfg.HEX_SIZE * 0.55
+    )
+
+
+    # --------------------------------------------------
+    # CALCULATE MOVEMENT RANGE
+    # --------------------------------------------------
+
+    reachable_hexes = hexes_within_range(
+        state.player_position,
+        cfg.MAX_MOVE_RANGE,
+    )
+
+    reachable_hexes = {
+        hex_position
+        for hex_position in reachable_hexes
+        if is_hex_on_map(
+            hex_position
+        )
+    }
 
 
     # --------------------------------------------------
@@ -101,12 +153,74 @@ while running:
 
 
     # --------------------------------------------------
-    # DRAW PLAYER
+    # DRAW MOVEMENT RANGE OUTER PERIMETER
     # --------------------------------------------------
 
-    player_center = axial_to_pixel(
-        state.player_position
-    )
+    if player_is_hovered:
+
+        for hex_position in reachable_hexes:
+
+            q, r = hex_position
+
+            center = axial_to_pixel(
+                hex_position
+            )
+
+            points = hex_corners(
+                center
+            )
+
+            for edge_index, (
+                dq,
+                dr,
+            ) in enumerate(
+                HEX_EDGE_NEIGHBORS
+            ):
+
+                neighbor = (
+                    q + dq,
+                    r + dr,
+                )
+
+                # If another reachable hex is beside this
+                # edge, this is an INTERNAL edge.
+                #
+                # Therefore we do NOT glow it.
+                if neighbor in reachable_hexes:
+                    continue
+
+                point_a = points[
+                    edge_index
+                ]
+
+                point_b = points[
+                    (
+                        edge_index + 1
+                    ) % 6
+                ]
+
+                # Soft, thick outer glow.
+                pygame.draw.line(
+                    screen,
+                    cfg.RANGE_GLOW_SOFT,
+                    point_a,
+                    point_b,
+                    7,
+                )
+
+                # Bright, thin centre line.
+                pygame.draw.line(
+                    screen,
+                    cfg.RANGE_GLOW,
+                    point_a,
+                    point_b,
+                    2,
+                )
+
+
+    # --------------------------------------------------
+    # DRAW PLAYER
+    # --------------------------------------------------
 
     player_points = hex_corners(
         player_center,
@@ -151,7 +265,7 @@ while running:
 
 
     # --------------------------------------------------
-    # CREATE HUD TEXT
+    # CREATE MAIN HUD TEXT
     # --------------------------------------------------
 
     title_text = font.render(
@@ -189,15 +303,38 @@ while running:
         cfg.TEXT_COLOR,
     )
 
+
+    # --------------------------------------------------
+    # CREATE DEBUG TEXT
+    # --------------------------------------------------
+
     debug_title = small_font.render(
         "DEVELOPMENT BUILD",
         True,
         cfg.SUBTEXT_COLOR,
     )
 
+    hover_text = small_font.render(
+        (
+            "PLAYER HOVER: "
+            f"{player_is_hovered}"
+        ),
+        True,
+        cfg.SUBTEXT_COLOR,
+    )
+
+    range_text = small_font.render(
+        (
+            "MAX MOVE RANGE: "
+            f"{cfg.MAX_MOVE_RANGE}"
+        ),
+        True,
+        cfg.SUBTEXT_COLOR,
+    )
+
 
     # --------------------------------------------------
-    # DRAW HUD TEXT
+    # DRAW MAIN HUD TEXT
     # --------------------------------------------------
 
     screen.blit(
@@ -232,11 +369,32 @@ while running:
         ),
     )
 
+
+    # --------------------------------------------------
+    # DRAW DEBUG TEXT
+    # --------------------------------------------------
+
     screen.blit(
         debug_title,
         (
             panel_x + 24,
             230,
+        ),
+    )
+
+    screen.blit(
+        hover_text,
+        (
+            panel_x + 24,
+            270,
+        ),
+    )
+
+    screen.blit(
+        range_text,
+        (
+            panel_x + 24,
+            300,
         ),
     )
 
