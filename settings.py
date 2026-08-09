@@ -42,6 +42,8 @@ MAX_MOVE_RANGE = 3
 
 PLAYER_START = (10, 5)
 
+MOVE_ENERGY_COST_PER_HEX = 1
+
 
 # --------------------------------------------------
 # COLORS

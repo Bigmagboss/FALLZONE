@@ -87,16 +87,13 @@ while running:
                     clicked_hex,
                 )
 
-                valid_movement = (
-                    1
-                    <= clicked_distance
-                    <= cfg.MAX_MOVE_RANGE
-                )
-
-                if valid_movement:
+                if state.can_move(
+                    clicked_distance
+                ):
 
                     state.move_player_to(
-                        clicked_hex
+                        clicked_hex,
+                        clicked_distance,
                     )
 
 
@@ -156,8 +153,9 @@ while running:
         )
 
         mouse_hex_in_range = (
-            mouse_hex_distance
-            <= cfg.MAX_MOVE_RANGE
+            1
+            <= mouse_hex_distance
+            <= current_move_range
         )
 
     else:
@@ -170,9 +168,19 @@ while running:
     # CALCULATE MOVEMENT RANGE
     # --------------------------------------------------
 
+    energy_move_limit = (
+        state.player_energy
+        // cfg.MOVE_ENERGY_COST_PER_HEX
+    )
+
+    current_move_range = min(
+        state.movement_remaining,
+        energy_move_limit,
+    )
+    
     reachable_hexes = hexes_within_range(
         state.player_position,
-        cfg.MAX_MOVE_RANGE,
+        current_move_range,
     )
 
     reachable_hexes = {
@@ -236,7 +244,11 @@ while running:
     # DRAW MOVEMENT RANGE OUTER PERIMETER
     # --------------------------------------------------
 
-    if player_is_hovered:
+    if (
+        player_is_hovered
+        and
+        current_move_range > 0
+    ):
 
         for hex_position in reachable_hexes:
 
@@ -447,6 +459,25 @@ while running:
         cfg.SUBTEXT_COLOR,
     )
 
+    movement_left_text = small_font.render(
+        (
+            "MOVE LEFT: "
+            f"{state.movement_remaining} "
+            f"/ {cfg.MAX_MOVE_RANGE}"
+        ),
+        True,
+        cfg.SUBTEXT_COLOR,
+    )
+
+    current_range_text = small_font.render(
+        (
+            "CURRENT RANGE: "
+            f"{current_move_range}"
+        ),
+        True,
+        cfg.SUBTEXT_COLOR,
+    )
+
     if mouse_hex_on_map:
 
         mouse_hex_text = small_font.render(
@@ -554,6 +585,22 @@ while running:
         (
             panel_x + 24,
             300,
+        ),
+    )
+
+    screen.blit(
+        movement_left_text,
+        (
+            panel_x + 24,
+            330,
+        ),
+    )
+
+    screen.blit(
+        current_range_text,
+        (
+            panel_x + 24,
+            360,
         ),
     )
 
