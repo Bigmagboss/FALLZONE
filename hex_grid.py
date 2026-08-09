@@ -62,9 +62,11 @@ def axial_to_pixel(hex_position):
         y + cfg.GRID_ORIGIN_Y,
     )
 
-def hex_corners(center):
+def hex_corners(center, size=None):
     center_x, center_y = center
 
+    if size is None:
+        size = cfg.HEX_SIZE
 
     points = []
 
@@ -80,13 +82,13 @@ def hex_corners(center):
 
         point_x = (
             center_x
-            + cfg.HEX_SIZE
+            + size
             * math.cos(angle_radians)
         )
 
         point_y = (
             center_y
-            + cfg.HEX_SIZE
+            + size
             * math.sin(angle_radians)
         )
 

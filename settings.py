@@ -40,7 +40,7 @@ MAX_ENERGY = 10
 
 MAX_MOVE_RANGE = 3
 
-PLAYER_START = (7, 8)
+PLAYER_START = (10, 5)
 
 
 # --------------------------------------------------
@@ -62,6 +62,7 @@ RANGE_FILL = (60, 120, 170)
 RANGE_OUTLINE = (120, 205, 255)
 
 TEXT_COLOR = (230, 230, 235)
+SUBTEXT_COLOR = (165, 170, 180)
 
 PANEL_COLOR = (27, 28, 32)
 
