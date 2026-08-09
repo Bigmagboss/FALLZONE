@@ -1,5 +1,7 @@
 import math
 
+from collections import deque
+
 import settings as cfg
 
 
@@ -17,10 +19,8 @@ HEX_DIRECTIONS = (
 )
 
 
-# These are the same six neighbours, but ordered
-# to match the six polygon edges created by
-# hex_corners().
-
+# Same six neighbours, but in the order matching
+# the polygon edges produced by hex_corners().
 HEX_EDGE_NEIGHBORS = (
     (1, 0),
     (0, 1),
@@ -35,12 +35,15 @@ HEX_EDGE_NEIGHBORS = (
 # HEX NEIGHBOURS
 # --------------------------------------------------
 
-def get_neighbors(hex_position):
+def get_neighbors(
+    hex_position
+):
     q, r = hex_position
 
     neighbors = []
 
     for dq, dr in HEX_DIRECTIONS:
+
         neighbor = (
             q + dq,
             r + dr,
@@ -54,10 +57,13 @@ def get_neighbors(hex_position):
 
 
 # --------------------------------------------------
-# HEX DISTANCE
+# DIRECT HEX DISTANCE
 # --------------------------------------------------
 
-def hex_distance(hex_a, hex_b):
+def hex_distance(
+    hex_a,
+    hex_b,
+):
     q1, r1 = hex_a
     q2, r2 = hex_b
 
@@ -77,7 +83,7 @@ def hex_distance(hex_a, hex_b):
 
 
 # --------------------------------------------------
-# HEX RANGE
+# SIMPLE HEX RANGE
 # --------------------------------------------------
 
 def hexes_within_range(
@@ -129,6 +135,7 @@ def axial_round(
     r_float,
 ):
     x = q_float
+
     z = r_float
 
     y = (
@@ -165,6 +172,7 @@ def axial_round(
         and
         x_difference > z_difference
     ):
+
         rounded_x = (
             -rounded_y
             - rounded_z
@@ -174,12 +182,14 @@ def axial_round(
         y_difference
         > z_difference
     ):
+
         rounded_y = (
             -rounded_x
             - rounded_z
         )
 
     else:
+
         rounded_z = (
             -rounded_x
             - rounded_y
@@ -260,6 +270,76 @@ def is_hex_on_map(
         <= row
         < cfg.GRID_ROWS
     )
+
+
+# --------------------------------------------------
+# BFS OBSTACLE-AWARE REACHABILITY
+# --------------------------------------------------
+
+def get_reachable_hex_distances(
+    start,
+    max_steps,
+    blocked_hexes,
+):
+
+    distances = {
+        start: 0
+    }
+
+    frontier = deque(
+        [
+            start
+        ]
+    )
+
+    while frontier:
+
+        current = frontier.popleft()
+
+        current_distance = (
+            distances[
+                current
+            ]
+        )
+
+        if (
+            current_distance
+            >= max_steps
+        ):
+            continue
+
+        for neighbor in get_neighbors(
+            current
+        ):
+
+            # Wall or other blocked tile.
+            if neighbor in blocked_hexes:
+                continue
+
+            # Outside visible map.
+            if not is_hex_on_map(
+                neighbor
+            ):
+                continue
+
+            # Already found by a shorter path.
+            if neighbor in distances:
+                continue
+
+            next_distance = (
+                current_distance
+                + 1
+            )
+
+            distances[
+                neighbor
+            ] = next_distance
+
+            frontier.append(
+                neighbor
+            )
+
+    return distances
 
 
 # --------------------------------------------------
@@ -352,7 +432,10 @@ def hex_corners(
     center_x, center_y = center
 
     if size is None:
-        size = cfg.HEX_SIZE
+
+        size = (
+            cfg.HEX_SIZE
+        )
 
     points = []
 
@@ -362,8 +445,10 @@ def hex_corners(
             60 * corner
         )
 
-        angle_radians = math.radians(
-            angle_degrees
+        angle_radians = (
+            math.radians(
+                angle_degrees
+            )
         )
 
         point_x = (

@@ -5,9 +5,10 @@ class GameState:
 
     def __init__(self):
 
-        # These begin with the normal game defaults,
-        # but developer controls may change them
-        # temporarily during this running session.
+        # Developer-overridable values.
+        #
+        # They begin with the normal settings values
+        # whenever FALLZONE is launched.
 
         self.session_max_energy = (
             cfg.MAX_ENERGY
@@ -26,6 +27,7 @@ class GameState:
 
     @property
     def player_position(self):
+
         return (
             self.player_q,
             self.player_r,
@@ -33,13 +35,16 @@ class GameState:
 
 
     # --------------------------------------------------
-    # MOVEMENT VALIDATION
+    # CHECK WHETHER MOVEMENT CAN BE PAID FOR
     # --------------------------------------------------
 
     def can_move(
         self,
         movement_cost,
     ):
+
+        if movement_cost < 1:
+            return False
 
         enough_movement = (
             movement_cost
@@ -57,8 +62,6 @@ class GameState:
         )
 
         return (
-            movement_cost >= 1
-            and
             enough_movement
             and
             enough_energy
@@ -78,6 +81,7 @@ class GameState:
         if not self.can_move(
             movement_cost
         ):
+
             return False
 
         energy_cost = (
@@ -105,7 +109,7 @@ class GameState:
 
 
     # --------------------------------------------------
-    # RESET CURRENT MOVEMENT BUDGET
+    # RESET MOVEMENT ONLY
     # --------------------------------------------------
 
     def reset_turn(self):
@@ -147,7 +151,7 @@ class GameState:
 
 
     # --------------------------------------------------
-    # SET SESSION ENERGY
+    # DEVELOPER ENERGY OVERRIDE
     # --------------------------------------------------
 
     def set_session_energy(
@@ -167,9 +171,12 @@ class GameState:
             ),
         )
 
-        # Developer override:
-        # replace both the session maximum
-        # and current energy.
+        # This is an overwrite, not addition.
+        #
+        # Example:
+        # current energy = 1
+        # developer enters 5
+        # new energy = 5
 
         self.session_max_energy = (
             value
@@ -187,7 +194,7 @@ class GameState:
 
 
     # --------------------------------------------------
-    # SET SESSION MOVEMENT
+    # DEVELOPER MOVEMENT OVERRIDE
     # --------------------------------------------------
 
     def set_session_move_range(
@@ -207,9 +214,9 @@ class GameState:
             ),
         )
 
-        # Developer override:
-        # replace both maximum movement
-        # and movement remaining.
+        # This also overwrites the currently available
+        # movement so the new value is immediately
+        # testable.
 
         self.session_max_move_range = (
             value
