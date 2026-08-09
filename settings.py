@@ -50,13 +50,11 @@ MOVE_ENERGY_COST_PER_HEX = 1
 # DEVELOPMENT TOOLS
 # --------------------------------------------------
 
-DEV_ENERGY_STEP = 10
-
-DEV_MIN_ENERGY = 10
+DEV_MIN_ENERGY = 0
 DEV_MAX_ENERGY = 500
 
 DEV_MIN_MOVE_RANGE = 1
-DEV_MAX_MOVE_RANGE = 100
+DEV_MAX_MOVE_RANGE = 10
 
 
 # --------------------------------------------------

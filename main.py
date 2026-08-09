@@ -73,7 +73,7 @@ panel_x = (
 
 
 # --------------------------------------------------
-# DEVELOPMENT BUTTONS
+# DEVELOPMENT CONTROL RECTANGLES
 # --------------------------------------------------
 
 reset_turn_rect = pygame.Rect(
@@ -92,40 +92,35 @@ reset_player_rect = pygame.Rect(
 )
 
 
-energy_down_rect = pygame.Rect(
+energy_input_rect = pygame.Rect(
     panel_x + 20,
-    585,
-    120,
+    605,
+    255,
     34,
 )
 
 
-energy_up_rect = pygame.Rect(
-    panel_x + 155,
-    585,
-    120,
-    34,
-)
-
-
-move_down_rect = pygame.Rect(
+move_input_rect = pygame.Rect(
     panel_x + 20,
-    635,
-    120,
-    34,
-)
-
-
-move_up_rect = pygame.Rect(
-    panel_x + 155,
-    635,
-    120,
+    675,
+    255,
     34,
 )
 
 
 # --------------------------------------------------
-# DRAW BUTTON FUNCTION
+# TEXT INPUT STATE
+# --------------------------------------------------
+
+active_input = None
+
+energy_input_text = ""
+
+move_input_text = ""
+
+
+# --------------------------------------------------
+# DRAW BUTTON
 # --------------------------------------------------
 
 def draw_button(
@@ -176,6 +171,93 @@ def draw_button(
 
 
 # --------------------------------------------------
+# DRAW TEXT INPUT BOX
+# --------------------------------------------------
+
+def draw_input_box(
+    surface,
+    rectangle,
+    text_value,
+    active,
+    font_object,
+):
+
+    pygame.draw.rect(
+        surface,
+        cfg.BUTTON_COLOR,
+        rectangle,
+        border_radius=5,
+    )
+
+
+    if active:
+
+        border_colour = (
+            cfg.HOVER_VALID_OUTLINE
+        )
+
+    else:
+
+        border_colour = (
+            cfg.HEX_OUTLINE
+        )
+
+
+    pygame.draw.rect(
+        surface,
+        border_colour,
+        rectangle,
+        2,
+        border_radius=5,
+    )
+
+
+    if text_value:
+
+        display_text = (
+            text_value
+        )
+
+        text_colour = (
+            cfg.TEXT_COLOR
+        )
+
+    else:
+
+        if active:
+
+            display_text = (
+                "|"
+            )
+
+        else:
+
+            display_text = (
+                "Click, type number, Enter"
+            )
+
+        text_colour = (
+            cfg.SUBTEXT_COLOR
+        )
+
+
+    text_surface = font_object.render(
+        display_text,
+        True,
+        text_colour,
+    )
+
+
+    surface.blit(
+        text_surface,
+        (
+            rectangle.x + 10,
+            rectangle.y + 7,
+        ),
+    )
+
+
+# --------------------------------------------------
 # MAIN GAME LOOP
 # --------------------------------------------------
 
@@ -195,6 +277,143 @@ while running:
 
 
         # --------------------------------------------------
+        # KEYBOARD INPUT FOR DEV TEXT BOXES
+        # --------------------------------------------------
+
+        if (
+            event.type == pygame.KEYDOWN
+            and
+            active_input is not None
+        ):
+
+            # ------------------------------------------
+            # ENTER
+            # ------------------------------------------
+
+            if event.key == pygame.K_RETURN:
+
+                if (
+                    active_input == "energy"
+                    and
+                    energy_input_text
+                ):
+
+                    state.set_session_energy(
+                        int(
+                            energy_input_text
+                        )
+                    )
+
+                    energy_input_text = ""
+
+                    active_input = None
+
+
+                elif (
+                    active_input == "move"
+                    and
+                    move_input_text
+                ):
+
+                    state.set_session_move_range(
+                        int(
+                            move_input_text
+                        )
+                    )
+
+                    move_input_text = ""
+
+                    active_input = None
+
+
+                else:
+
+                    state.status_message = (
+                        "Enter a number first."
+                    )
+
+
+                continue
+
+
+            # ------------------------------------------
+            # BACKSPACE
+            # ------------------------------------------
+
+            if event.key == pygame.K_BACKSPACE:
+
+                if active_input == "energy":
+
+                    energy_input_text = (
+                        energy_input_text[:-1]
+                    )
+
+
+                elif active_input == "move":
+
+                    move_input_text = (
+                        move_input_text[:-1]
+                    )
+
+
+                continue
+
+
+            # ------------------------------------------
+            # ESCAPE
+            # ------------------------------------------
+
+            if event.key == pygame.K_ESCAPE:
+
+                active_input = None
+
+                energy_input_text = ""
+
+                move_input_text = ""
+
+                state.status_message = (
+                    "Developer input cancelled."
+                )
+
+                continue
+
+
+            # ------------------------------------------
+            # DIGITS ONLY
+            # ------------------------------------------
+
+            if event.unicode.isdigit():
+
+                if active_input == "energy":
+
+                    if (
+                        len(
+                            energy_input_text
+                        )
+                        < 4
+                    ):
+                        energy_input_text += (
+                            event.unicode
+                        )
+
+
+                elif active_input == "move":
+
+                    if (
+                        len(
+                            move_input_text
+                        )
+                        < 4
+                    ):
+                        move_input_text += (
+                            event.unicode
+                        )
+
+
+                continue
+
+
+        # --------------------------------------------------
         # LEFT MOUSE CLICK
         # --------------------------------------------------
 
@@ -210,63 +429,85 @@ while running:
 
 
             # --------------------------------------------------
-            # DEVELOPMENT BUTTONS
+            # RESET TURN BUTTON
             # --------------------------------------------------
 
             if reset_turn_rect.collidepoint(
                 clicked_position
             ):
+
+                active_input = None
+
                 state.reset_turn()
 
                 continue
 
 
+            # --------------------------------------------------
+            # RESET PLAYER BUTTON
+            # --------------------------------------------------
+
             if reset_player_rect.collidepoint(
                 clicked_position
             ):
+
+                active_input = None
+
                 state.reset_player()
 
                 continue
 
 
-            if energy_down_rect.collidepoint(
+            # --------------------------------------------------
+            # ENERGY INPUT
+            # --------------------------------------------------
+
+            if energy_input_rect.collidepoint(
                 clicked_position
             ):
-                state.adjust_session_energy(
-                    -cfg.DEV_ENERGY_STEP
+
+                active_input = (
+                    "energy"
+                )
+
+                energy_input_text = ""
+
+                move_input_text = ""
+
+                state.status_message = (
+                    "Type energy and press Enter."
                 )
 
                 continue
 
 
-            if energy_up_rect.collidepoint(
+            # --------------------------------------------------
+            # MOVE INPUT
+            # --------------------------------------------------
+
+            if move_input_rect.collidepoint(
                 clicked_position
             ):
-                state.adjust_session_energy(
-                    cfg.DEV_ENERGY_STEP
+
+                active_input = (
+                    "move"
+                )
+
+                move_input_text = ""
+
+                energy_input_text = ""
+
+                state.status_message = (
+                    "Type movement and press Enter."
                 )
 
                 continue
 
 
-            if move_down_rect.collidepoint(
-                clicked_position
-            ):
-                state.adjust_session_move_range(
-                    -1
-                )
+            # Click somewhere else:
+            # deactivate any text box.
 
-                continue
-
-
-            if move_up_rect.collidepoint(
-                clicked_position
-            ):
-                state.adjust_session_move_range(
-                    1
-                )
-
-                continue
+            active_input = None
 
 
             # --------------------------------------------------
@@ -292,9 +533,11 @@ while running:
                 )
             ):
 
-                clicked_distance = hex_distance(
-                    state.player_position,
-                    clicked_hex,
+                clicked_distance = (
+                    hex_distance(
+                        state.player_position,
+                        clicked_hex,
+                    )
                 )
 
 
@@ -312,7 +555,9 @@ while running:
     # MOUSE POSITION
     # --------------------------------------------------
 
-    mouse_position = pygame.mouse.get_pos()
+    mouse_position = (
+        pygame.mouse.get_pos()
+    )
 
 
     # --------------------------------------------------
@@ -353,7 +598,7 @@ while running:
 
 
     # --------------------------------------------------
-    # CALCULATE CURRENT MOVEMENT RANGE
+    # CURRENT MOVEMENT RANGE
     # --------------------------------------------------
 
     energy_move_limit = (
@@ -384,7 +629,7 @@ while running:
 
 
     # --------------------------------------------------
-    # IDENTIFY HEX UNDER MOUSE
+    # HEX UNDER MOUSE
     # --------------------------------------------------
 
     mouse_hex = pixel_to_axial(
@@ -404,9 +649,11 @@ while running:
 
     if mouse_hex_on_map:
 
-        mouse_hex_distance = hex_distance(
-            state.player_position,
-            mouse_hex,
+        mouse_hex_distance = (
+            hex_distance(
+                state.player_position,
+                mouse_hex,
+            )
         )
 
 
@@ -425,7 +672,7 @@ while running:
 
 
     # --------------------------------------------------
-    # DECIDE WHETHER TO SHOW BLUE MOVEMENT PERIMETER
+    # BLUE MOVEMENT PERIMETER VISIBILITY
     # --------------------------------------------------
 
     show_movement_perimeter = (
@@ -440,7 +687,7 @@ while running:
 
 
     # --------------------------------------------------
-    # DRAW BACKGROUND
+    # BACKGROUND
     # --------------------------------------------------
 
     screen.fill(
@@ -492,7 +739,7 @@ while running:
 
 
     # --------------------------------------------------
-    # DRAW BLUE MOVEMENT RANGE OUTER PERIMETER
+    # DRAW BLUE MOVEMENT RANGE PERIMETER
     # --------------------------------------------------
 
     if show_movement_perimeter:
@@ -525,9 +772,6 @@ while running:
                 )
 
 
-                # If another reachable hex exists
-                # across this edge, the edge is
-                # internal and should NOT glow.
                 if neighbor in reachable_hexes:
                     continue
 
@@ -544,7 +788,6 @@ while running:
                 ]
 
 
-                # Soft blue glow.
                 pygame.draw.line(
                     screen,
                     cfg.RANGE_GLOW_SOFT,
@@ -554,7 +797,6 @@ while running:
                 )
 
 
-                # Bright blue centre.
                 pygame.draw.line(
                     screen,
                     cfg.RANGE_GLOW,
@@ -565,7 +807,7 @@ while running:
 
 
     # --------------------------------------------------
-    # DRAW HOVERED DESTINATION HEX
+    # DRAW HOVERED DESTINATION
     # --------------------------------------------------
 
     if (
@@ -591,7 +833,6 @@ while running:
                 cfg.HOVER_VALID_GLOW_SOFT
             )
 
-
             hover_bright_colour = (
                 cfg.HOVER_VALID_OUTLINE
             )
@@ -603,13 +844,11 @@ while running:
                 cfg.HOVER_INVALID_GLOW_SOFT
             )
 
-
             hover_bright_colour = (
                 cfg.HOVER_INVALID_OUTLINE
             )
 
 
-        # Soft thick glow.
         pygame.draw.polygon(
             screen,
             hover_soft_colour,
@@ -618,7 +857,6 @@ while running:
         )
 
 
-        # Bright thin edge.
         pygame.draw.polygon(
             screen,
             hover_bright_colour,
@@ -672,7 +910,7 @@ while running:
 
 
     # --------------------------------------------------
-    # CREATE MAIN HUD TEXT
+    # MAIN HUD TEXT
     # --------------------------------------------------
 
     title_text = font.render(
@@ -715,7 +953,7 @@ while running:
 
 
     # --------------------------------------------------
-    # CREATE DEBUG TEXT
+    # DEBUG TEXT
     # --------------------------------------------------
 
     debug_title = small_font.render(
@@ -768,7 +1006,7 @@ while running:
 
 
     # --------------------------------------------------
-    # CREATE MOUSE DEBUG TEXT
+    # MOUSE DEBUG TEXT
     # --------------------------------------------------
 
     if mouse_hex_on_map:
@@ -833,8 +1071,22 @@ while running:
     )
 
 
+    energy_label_text = small_font.render(
+        "SET ENERGY",
+        True,
+        cfg.TEXT_COLOR,
+    )
+
+
+    move_label_text = small_font.render(
+        "SET MOVE",
+        True,
+        cfg.TEXT_COLOR,
+    )
+
+
     # --------------------------------------------------
-    # DRAW MAIN HUD TEXT
+    # DRAW MAIN HUD
     # --------------------------------------------------
 
     screen.blit(
@@ -959,7 +1211,7 @@ while running:
 
 
     # --------------------------------------------------
-    # DRAW DEVELOPMENT CONTROLS
+    # DRAW DEV CONTROLS
     # --------------------------------------------------
 
     screen.blit(
@@ -989,39 +1241,39 @@ while running:
     )
 
 
-    draw_button(
-        screen,
-        energy_down_rect,
-        "ENERGY -10",
-        small_font,
-        mouse_position,
+    screen.blit(
+        energy_label_text,
+        (
+            panel_x + 20,
+            582,
+        ),
     )
 
 
-    draw_button(
+    draw_input_box(
         screen,
-        energy_up_rect,
-        "ENERGY +10",
+        energy_input_rect,
+        energy_input_text,
+        active_input == "energy",
         small_font,
-        mouse_position,
     )
 
 
-    draw_button(
-        screen,
-        move_down_rect,
-        "MOVE -1",
-        small_font,
-        mouse_position,
+    screen.blit(
+        move_label_text,
+        (
+            panel_x + 20,
+            652,
+        ),
     )
 
 
-    draw_button(
+    draw_input_box(
         screen,
-        move_up_rect,
-        "MOVE +1",
+        move_input_rect,
+        move_input_text,
+        active_input == "move",
         small_font,
-        mouse_position,
     )
 
 

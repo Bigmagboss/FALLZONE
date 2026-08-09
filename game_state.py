@@ -5,6 +5,10 @@ class GameState:
 
     def __init__(self):
 
+        # These begin with the normal game defaults,
+        # but developer controls may change them
+        # temporarily during this running session.
+
         self.session_max_energy = (
             cfg.MAX_ENERGY
         )
@@ -16,6 +20,10 @@ class GameState:
         self.reset_player()
 
 
+    # --------------------------------------------------
+    # PLAYER POSITION
+    # --------------------------------------------------
+
     @property
     def player_position(self):
         return (
@@ -24,10 +32,15 @@ class GameState:
         )
 
 
+    # --------------------------------------------------
+    # MOVEMENT VALIDATION
+    # --------------------------------------------------
+
     def can_move(
         self,
         movement_cost,
     ):
+
         enough_movement = (
             movement_cost
             <= self.movement_remaining
@@ -52,11 +65,16 @@ class GameState:
         )
 
 
+    # --------------------------------------------------
+    # MOVE PLAYER
+    # --------------------------------------------------
+
     def move_player_to(
         self,
         destination,
         movement_cost,
     ):
+
         if not self.can_move(
             movement_cost
         ):
@@ -87,7 +105,7 @@ class GameState:
 
 
     # --------------------------------------------------
-    # DEVELOPMENT RESET CONTROLS
+    # RESET CURRENT MOVEMENT BUDGET
     # --------------------------------------------------
 
     def reset_turn(self):
@@ -100,6 +118,10 @@ class GameState:
             "Movement budget reset."
         )
 
+
+    # --------------------------------------------------
+    # RESET PLAYER
+    # --------------------------------------------------
 
     def reset_player(self):
 
@@ -125,94 +147,80 @@ class GameState:
 
 
     # --------------------------------------------------
-    # DEVELOPMENT ENERGY CONTROL
+    # SET SESSION ENERGY
     # --------------------------------------------------
 
-    def adjust_session_energy(
+    def set_session_energy(
         self,
-        amount,
+        value,
     ):
-        old_max = (
-            self.session_max_energy
+
+        value = int(
+            value
         )
 
-        energy_spent = max(
-            0,
-            old_max
-            - self.player_energy,
-        )
-
-        new_max = (
-            old_max
-            + amount
-        )
-
-        new_max = max(
+        value = max(
             cfg.DEV_MIN_ENERGY,
             min(
-                new_max,
+                value,
                 cfg.DEV_MAX_ENERGY,
             ),
         )
 
+        # Developer override:
+        # replace both the session maximum
+        # and current energy.
+
         self.session_max_energy = (
-            new_max
+            value
         )
 
-        self.player_energy = max(
-            0,
-            new_max
-            - energy_spent,
+        self.player_energy = (
+            value
         )
 
         self.status_message = (
-            f"Session energy set to "
-            f"{new_max}."
+            f"Energy set to {value}."
         )
 
+        return value
+
 
     # --------------------------------------------------
-    # DEVELOPMENT MOVEMENT CONTROL
+    # SET SESSION MOVEMENT
     # --------------------------------------------------
 
-    def adjust_session_move_range(
+    def set_session_move_range(
         self,
-        amount,
+        value,
     ):
-        old_max = (
-            self.session_max_move_range
+
+        value = int(
+            value
         )
 
-        movement_spent = max(
-            0,
-            old_max
-            - self.movement_remaining,
-        )
-
-        new_max = (
-            old_max
-            + amount
-        )
-
-        new_max = max(
+        value = max(
             cfg.DEV_MIN_MOVE_RANGE,
             min(
-                new_max,
+                value,
                 cfg.DEV_MAX_MOVE_RANGE,
             ),
         )
 
+        # Developer override:
+        # replace both maximum movement
+        # and movement remaining.
+
         self.session_max_move_range = (
-            new_max
+            value
         )
 
-        self.movement_remaining = max(
-            0,
-            new_max
-            - movement_spent,
+        self.movement_remaining = (
+            value
         )
 
         self.status_message = (
-            f"Session movement set to "
-            f"{new_max}."
+            f"Movement set to {value}."
         )
+
+        return value
