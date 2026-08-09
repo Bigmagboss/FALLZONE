@@ -8,9 +8,11 @@ from hex_grid import (
     HEX_EDGE_NEIGHBORS,
     axial_to_pixel,
     hex_corners,
+    hex_distance,
     hexes_within_range,
     is_hex_on_map,
     offset_to_axial,
+    pixel_to_axial,
 )
 
 pygame.init()
@@ -84,6 +86,41 @@ while running:
         mouse_distance_from_player
         <= cfg.HEX_SIZE * 0.55
     )
+
+
+    # --------------------------------------------------
+    # IDENTIFY HEX UNDER MOUSE
+    # --------------------------------------------------
+
+    mouse_hex = pixel_to_axial(
+        mouse_position
+    )
+
+    mouse_hex_on_map = (
+        mouse_position[0]
+        < cfg.PLAY_AREA_WIDTH
+        and
+        is_hex_on_map(
+            mouse_hex
+        )
+    )
+
+    if mouse_hex_on_map:
+
+        mouse_hex_distance = hex_distance(
+            state.player_position,
+            mouse_hex,
+        )
+
+        mouse_hex_in_range = (
+            mouse_hex_distance
+            <= cfg.MAX_MOVE_RANGE
+        )
+
+    else:
+
+        mouse_hex_distance = None
+        mouse_hex_in_range = False
 
 
     # --------------------------------------------------
@@ -219,6 +256,41 @@ while running:
 
 
     # --------------------------------------------------
+    # DRAW HOVERED DESTINATION HEX
+    # --------------------------------------------------
+
+    if (
+        mouse_hex_on_map
+        and
+        mouse_hex != state.player_position
+    ):
+
+        hover_center = axial_to_pixel(
+            mouse_hex
+        )
+
+        hover_points = hex_corners(
+            hover_center
+        )
+
+        if mouse_hex_in_range:
+            hover_colour = (
+                cfg.HOVER_VALID_OUTLINE
+            )
+
+        else:
+            hover_colour = (
+                cfg.HOVER_INVALID_OUTLINE
+            )
+
+            pygame.draw.polygon(
+                screen,
+                hover_colour,
+                hover_points,
+                3,
+            )
+
+    # --------------------------------------------------
     # DRAW PLAYER
     # --------------------------------------------------
 
@@ -332,6 +404,50 @@ while running:
         cfg.SUBTEXT_COLOR,
     )
 
+    if mouse_hex_on_map:
+
+        mouse_hex_text = small_font.render(
+            (
+                "MOUSE HEX: "
+                f"{mouse_hex}"
+            ),
+            True,
+            cfg.SUBTEXT_COLOR,
+        )
+
+        distance_text = small_font.render(
+            (
+                "DISTANCE: "
+                f"{mouse_hex_distance}"
+            ),
+            True,
+            cfg.SUBTEXT_COLOR,
+        )
+
+    else:
+
+        mouse_hex_text = small_font.render(
+            "MOUSE HEX: OUTSIDE",
+            True,
+            cfg.SUBTEXT_COLOR,
+        )
+
+        distance_text = small_font.render(
+            "DISTANCE: -",
+            True,
+            cfg.SUBTEXT_COLOR,
+        )
+
+
+    valid_text = small_font.render(
+        (
+            "IN RANGE: "
+            f"{mouse_hex_in_range}"
+        ),
+        True,
+        cfg.SUBTEXT_COLOR,
+    )
+
 
     # --------------------------------------------------
     # DRAW MAIN HUD TEXT
@@ -395,6 +511,30 @@ while running:
         (
             panel_x + 24,
             300,
+        ),
+    )
+
+    screen.blit(
+        mouse_hex_text,
+        (
+            panel_x + 24,
+            340,
+        ),
+    )
+
+    screen.blit(
+        distance_text,
+        (
+            panel_x + 24,
+            370,
+        ),
+    )
+
+    screen.blit(
+        valid_text,
+        (
+            panel_x + 24,
+            400,
         ),
     )
 
