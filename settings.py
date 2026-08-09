@@ -45,6 +45,20 @@ PLAYER_START = (10, 5)
 MOVE_ENERGY_COST_PER_HEX = 1
 
 
+
+# --------------------------------------------------
+# DEVELOPMENT TOOLS
+# --------------------------------------------------
+
+DEV_ENERGY_STEP = 10
+
+DEV_MIN_ENERGY = 10
+DEV_MAX_ENERGY = 500
+
+DEV_MIN_MOVE_RANGE = 1
+DEV_MAX_MOVE_RANGE = 100
+
+
 # --------------------------------------------------
 # COLORS
 # --------------------------------------------------
@@ -78,6 +92,9 @@ BUTTON_HOVER_COLOR = (82, 90, 100)
 
 RANGE_GLOW_SOFT = (55, 115, 165)
 RANGE_GLOW = (120, 210, 255)
+
+HOVER_VALID_GLOW_SOFT = (55, 125, 80)
+HOVER_INVALID_GLOW_SOFT = (130, 55, 55)
 
 HOVER_VALID_OUTLINE = (130, 255, 175)
 HOVER_INVALID_OUTLINE = (255, 125, 125)

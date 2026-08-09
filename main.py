@@ -15,7 +15,13 @@ from hex_grid import (
     pixel_to_axial,
 )
 
+
+# --------------------------------------------------
+# PYGAME SETUP
+# --------------------------------------------------
+
 pygame.init()
+
 
 screen = pygame.display.set_mode(
     (
@@ -24,23 +30,154 @@ screen = pygame.display.set_mode(
     )
 )
 
+
 pygame.display.set_caption(
     f"FALLZONE v{cfg.VERSION}"
 )
 
+
 clock = pygame.time.Clock()
 
+
+# --------------------------------------------------
+# GAME STATE
+# --------------------------------------------------
+
 state = GameState()
+
+
+# --------------------------------------------------
+# FONTS
+# --------------------------------------------------
 
 font = pygame.font.Font(
     None,
     30,
 )
 
+
 small_font = pygame.font.Font(
     None,
     22,
 )
+
+
+# --------------------------------------------------
+# INFORMATION PANEL
+# --------------------------------------------------
+
+panel_x = (
+    cfg.SCREEN_WIDTH
+    - cfg.PANEL_WIDTH
+)
+
+
+# --------------------------------------------------
+# DEVELOPMENT BUTTONS
+# --------------------------------------------------
+
+reset_turn_rect = pygame.Rect(
+    panel_x + 20,
+    535,
+    120,
+    34,
+)
+
+
+reset_player_rect = pygame.Rect(
+    panel_x + 155,
+    535,
+    120,
+    34,
+)
+
+
+energy_down_rect = pygame.Rect(
+    panel_x + 20,
+    585,
+    120,
+    34,
+)
+
+
+energy_up_rect = pygame.Rect(
+    panel_x + 155,
+    585,
+    120,
+    34,
+)
+
+
+move_down_rect = pygame.Rect(
+    panel_x + 20,
+    635,
+    120,
+    34,
+)
+
+
+move_up_rect = pygame.Rect(
+    panel_x + 155,
+    635,
+    120,
+    34,
+)
+
+
+# --------------------------------------------------
+# DRAW BUTTON FUNCTION
+# --------------------------------------------------
+
+def draw_button(
+    surface,
+    rectangle,
+    label,
+    font_object,
+    mouse_position,
+):
+
+    if rectangle.collidepoint(
+        mouse_position
+    ):
+        colour = (
+            cfg.BUTTON_HOVER_COLOR
+        )
+
+    else:
+        colour = (
+            cfg.BUTTON_COLOR
+        )
+
+
+    pygame.draw.rect(
+        surface,
+        colour,
+        rectangle,
+        border_radius=5,
+    )
+
+
+    label_surface = font_object.render(
+        label,
+        True,
+        cfg.TEXT_COLOR,
+    )
+
+
+    label_rect = label_surface.get_rect(
+        center=rectangle.center
+    )
+
+
+    surface.blit(
+        label_surface,
+        label_rect,
+    )
+
+
+# --------------------------------------------------
+# MAIN GAME LOOP
+# --------------------------------------------------
 
 running = True
 
@@ -57,22 +194,95 @@ while running:
             running = False
 
 
+        # --------------------------------------------------
+        # LEFT MOUSE CLICK
+        # --------------------------------------------------
+
         if (
             event.type == pygame.MOUSEBUTTONDOWN
             and
             event.button == 1
         ):
 
-            clicked_position = event.pos
+            clicked_position = (
+                event.pos
+            )
+
+
+            # --------------------------------------------------
+            # DEVELOPMENT BUTTONS
+            # --------------------------------------------------
+
+            if reset_turn_rect.collidepoint(
+                clicked_position
+            ):
+                state.reset_turn()
+
+                continue
+
+
+            if reset_player_rect.collidepoint(
+                clicked_position
+            ):
+                state.reset_player()
+
+                continue
+
+
+            if energy_down_rect.collidepoint(
+                clicked_position
+            ):
+                state.adjust_session_energy(
+                    -cfg.DEV_ENERGY_STEP
+                )
+
+                continue
+
+
+            if energy_up_rect.collidepoint(
+                clicked_position
+            ):
+                state.adjust_session_energy(
+                    cfg.DEV_ENERGY_STEP
+                )
+
+                continue
+
+
+            if move_down_rect.collidepoint(
+                clicked_position
+            ):
+                state.adjust_session_move_range(
+                    -1
+                )
+
+                continue
+
+
+            if move_up_rect.collidepoint(
+                clicked_position
+            ):
+                state.adjust_session_move_range(
+                    1
+                )
+
+                continue
+
+
+            # --------------------------------------------------
+            # MAP MOVEMENT
+            # --------------------------------------------------
 
             clicked_hex = pixel_to_axial(
                 clicked_position
             )
 
+
             clicked_inside_play_area = (
                 clicked_position[0]
                 < cfg.PLAY_AREA_WIDTH
             )
+
 
             if (
                 clicked_inside_play_area
@@ -87,6 +297,7 @@ while running:
                     clicked_hex,
                 )
 
+
                 if state.can_move(
                     clicked_distance
                 ):
@@ -98,34 +309,78 @@ while running:
 
 
     # --------------------------------------------------
-    # MOUSE / PLAYER HOVER
+    # MOUSE POSITION
     # --------------------------------------------------
 
     mouse_position = pygame.mouse.get_pos()
 
+
+    # --------------------------------------------------
+    # PLAYER SCREEN POSITION
+    # --------------------------------------------------
+
     player_center = axial_to_pixel(
         state.player_position
     )
+
+
+    # --------------------------------------------------
+    # PLAYER HOVER DETECTION
+    # --------------------------------------------------
 
     mouse_dx = (
         mouse_position[0]
         - player_center[0]
     )
 
+
     mouse_dy = (
         mouse_position[1]
         - player_center[1]
     )
+
 
     mouse_distance_from_player = (
         mouse_dx * mouse_dx
         + mouse_dy * mouse_dy
     ) ** 0.5
 
+
     player_is_hovered = (
         mouse_distance_from_player
         <= cfg.HEX_SIZE * 0.55
     )
+
+
+    # --------------------------------------------------
+    # CALCULATE CURRENT MOVEMENT RANGE
+    # --------------------------------------------------
+
+    energy_move_limit = (
+        state.player_energy
+        // cfg.MOVE_ENERGY_COST_PER_HEX
+    )
+
+
+    current_move_range = min(
+        state.movement_remaining,
+        energy_move_limit,
+    )
+
+
+    reachable_hexes = hexes_within_range(
+        state.player_position,
+        current_move_range,
+    )
+
+
+    reachable_hexes = {
+        hex_position
+        for hex_position in reachable_hexes
+        if is_hex_on_map(
+            hex_position
+        )
+    }
 
 
     # --------------------------------------------------
@@ -136,6 +391,7 @@ while running:
         mouse_position
     )
 
+
     mouse_hex_on_map = (
         mouse_position[0]
         < cfg.PLAY_AREA_WIDTH
@@ -145,6 +401,7 @@ while running:
         )
     )
 
+
     if mouse_hex_on_map:
 
         mouse_hex_distance = hex_distance(
@@ -152,44 +409,34 @@ while running:
             mouse_hex,
         )
 
+
         mouse_hex_in_range = (
             1
             <= mouse_hex_distance
             <= current_move_range
         )
 
+
     else:
 
         mouse_hex_distance = None
+
         mouse_hex_in_range = False
 
 
     # --------------------------------------------------
-    # CALCULATE MOVEMENT RANGE
+    # DECIDE WHETHER TO SHOW BLUE MOVEMENT PERIMETER
     # --------------------------------------------------
 
-    energy_move_limit = (
-        state.player_energy
-        // cfg.MOVE_ENERGY_COST_PER_HEX
-    )
-
-    current_move_range = min(
-        state.movement_remaining,
-        energy_move_limit,
-    )
-    
-    reachable_hexes = hexes_within_range(
-        state.player_position,
-        current_move_range,
-    )
-
-    reachable_hexes = {
-        hex_position
-        for hex_position in reachable_hexes
-        if is_hex_on_map(
-            hex_position
+    show_movement_perimeter = (
+        current_move_range > 0
+        and
+        (
+            player_is_hovered
+            or
+            mouse_hex_in_range
         )
-    }
+    )
 
 
     # --------------------------------------------------
@@ -218,19 +465,23 @@ while running:
                 row,
             )
 
+
             center = axial_to_pixel(
                 hex_position
             )
 
+
             points = hex_corners(
                 center
             )
+
 
             pygame.draw.polygon(
                 screen,
                 cfg.HEX_FILL,
                 points,
             )
+
 
             pygame.draw.polygon(
                 screen,
@@ -241,26 +492,25 @@ while running:
 
 
     # --------------------------------------------------
-    # DRAW MOVEMENT RANGE OUTER PERIMETER
+    # DRAW BLUE MOVEMENT RANGE OUTER PERIMETER
     # --------------------------------------------------
 
-    if (
-        player_is_hovered
-        and
-        current_move_range > 0
-    ):
+    if show_movement_perimeter:
 
         for hex_position in reachable_hexes:
 
             q, r = hex_position
 
+
             center = axial_to_pixel(
                 hex_position
             )
 
+
             points = hex_corners(
                 center
             )
+
 
             for edge_index, (
                 dq,
@@ -274,16 +524,18 @@ while running:
                     r + dr,
                 )
 
-                # If another reachable hex is beside this
-                # edge, this is an INTERNAL edge.
-                #
-                # Therefore we do NOT glow it.
+
+                # If another reachable hex exists
+                # across this edge, the edge is
+                # internal and should NOT glow.
                 if neighbor in reachable_hexes:
                     continue
+
 
                 point_a = points[
                     edge_index
                 ]
+
 
                 point_b = points[
                     (
@@ -291,7 +543,8 @@ while running:
                     ) % 6
                 ]
 
-                # Soft, thick outer glow.
+
+                # Soft blue glow.
                 pygame.draw.line(
                     screen,
                     cfg.RANGE_GLOW_SOFT,
@@ -300,7 +553,8 @@ while running:
                     7,
                 )
 
-                # Bright, thin centre line.
+
+                # Bright blue centre.
                 pygame.draw.line(
                     screen,
                     cfg.RANGE_GLOW,
@@ -317,33 +571,61 @@ while running:
     if (
         mouse_hex_on_map
         and
-        mouse_hex != state.player_position
+        mouse_hex
+        != state.player_position
     ):
 
         hover_center = axial_to_pixel(
             mouse_hex
         )
 
+
         hover_points = hex_corners(
             hover_center
         )
 
+
         if mouse_hex_in_range:
-            hover_colour = (
+
+            hover_soft_colour = (
+                cfg.HOVER_VALID_GLOW_SOFT
+            )
+
+
+            hover_bright_colour = (
                 cfg.HOVER_VALID_OUTLINE
             )
 
+
         else:
-            hover_colour = (
+
+            hover_soft_colour = (
+                cfg.HOVER_INVALID_GLOW_SOFT
+            )
+
+
+            hover_bright_colour = (
                 cfg.HOVER_INVALID_OUTLINE
             )
 
-            pygame.draw.polygon(
-                screen,
-                hover_colour,
-                hover_points,
-                3,
-            )
+
+        # Soft thick glow.
+        pygame.draw.polygon(
+            screen,
+            hover_soft_colour,
+            hover_points,
+            7,
+        )
+
+
+        # Bright thin edge.
+        pygame.draw.polygon(
+            screen,
+            hover_bright_colour,
+            hover_points,
+            2,
+        )
+
 
     # --------------------------------------------------
     # DRAW PLAYER
@@ -354,11 +636,13 @@ while running:
         cfg.HEX_SIZE * 0.55,
     )
 
+
     pygame.draw.polygon(
         screen,
         cfg.PLAYER_FILL,
         player_points,
     )
+
 
     pygame.draw.polygon(
         screen,
@@ -372,17 +656,13 @@ while running:
     # DRAW INFORMATION PANEL
     # --------------------------------------------------
 
-    panel_x = (
-        cfg.SCREEN_WIDTH
-        - cfg.PANEL_WIDTH
-    )
-
     panel_rect = pygame.Rect(
         panel_x,
         0,
         cfg.PANEL_WIDTH,
         cfg.SCREEN_HEIGHT,
     )
+
 
     pygame.draw.rect(
         screen,
@@ -401,6 +681,7 @@ while running:
         cfg.TEXT_COLOR,
     )
 
+
     hp_text = font.render(
         (
             f"HP: "
@@ -411,15 +692,17 @@ while running:
         cfg.TEXT_COLOR,
     )
 
+
     energy_text = font.render(
         (
             f"ENERGY: "
             f"{state.player_energy} "
-            f"/ {cfg.MAX_ENERGY}"
+            f"/ {state.session_max_energy}"
         ),
         True,
         cfg.TEXT_COLOR,
     )
+
 
     position_text = font.render(
         (
@@ -441,6 +724,7 @@ while running:
         cfg.SUBTEXT_COLOR,
     )
 
+
     hover_text = small_font.render(
         (
             "PLAYER HOVER: "
@@ -450,24 +734,28 @@ while running:
         cfg.SUBTEXT_COLOR,
     )
 
+
     range_text = small_font.render(
         (
-            "MAX MOVE RANGE: "
-            f"{cfg.MAX_MOVE_RANGE}"
+            "SESSION MAX MOVE: "
+            f"{state.session_max_move_range}"
         ),
         True,
         cfg.SUBTEXT_COLOR,
     )
 
+
     movement_left_text = small_font.render(
         (
             "MOVE LEFT: "
             f"{state.movement_remaining} "
-            f"/ {cfg.MAX_MOVE_RANGE}"
+            f"/ "
+            f"{state.session_max_move_range}"
         ),
         True,
         cfg.SUBTEXT_COLOR,
     )
+
 
     current_range_text = small_font.render(
         (
@@ -477,6 +765,11 @@ while running:
         True,
         cfg.SUBTEXT_COLOR,
     )
+
+
+    # --------------------------------------------------
+    # CREATE MOUSE DEBUG TEXT
+    # --------------------------------------------------
 
     if mouse_hex_on_map:
 
@@ -489,6 +782,7 @@ while running:
             cfg.SUBTEXT_COLOR,
         )
 
+
         distance_text = small_font.render(
             (
                 "DISTANCE: "
@@ -498,6 +792,7 @@ while running:
             cfg.SUBTEXT_COLOR,
         )
 
+
     else:
 
         mouse_hex_text = small_font.render(
@@ -505,6 +800,7 @@ while running:
             True,
             cfg.SUBTEXT_COLOR,
         )
+
 
         distance_text = small_font.render(
             "DISTANCE: -",
@@ -523,6 +819,20 @@ while running:
     )
 
 
+    status_text = small_font.render(
+        state.status_message,
+        True,
+        cfg.SUBTEXT_COLOR,
+    )
+
+
+    dev_controls_text = small_font.render(
+        "DEV CONTROLS",
+        True,
+        cfg.TEXT_COLOR,
+    )
+
+
     # --------------------------------------------------
     # DRAW MAIN HUD TEXT
     # --------------------------------------------------
@@ -535,6 +845,7 @@ while running:
         ),
     )
 
+
     screen.blit(
         hp_text,
         (
@@ -543,6 +854,7 @@ while running:
         ),
     )
 
+
     screen.blit(
         energy_text,
         (
@@ -550,6 +862,7 @@ while running:
             130,
         ),
     )
+
 
     screen.blit(
         position_text,
@@ -568,64 +881,147 @@ while running:
         debug_title,
         (
             panel_x + 24,
-            230,
+            220,
         ),
     )
+
 
     screen.blit(
         hover_text,
         (
             panel_x + 24,
-            270,
+            250,
         ),
     )
+
 
     screen.blit(
         range_text,
         (
             panel_x + 24,
-            300,
+            278,
         ),
     )
+
 
     screen.blit(
         movement_left_text,
         (
             panel_x + 24,
-            330,
+            306,
         ),
     )
+
 
     screen.blit(
         current_range_text,
         (
             panel_x + 24,
-            360,
+            334,
         ),
     )
+
 
     screen.blit(
         mouse_hex_text,
         (
             panel_x + 24,
-            340,
+            375,
         ),
     )
+
 
     screen.blit(
         distance_text,
         (
             panel_x + 24,
-            370,
+            403,
         ),
     )
+
 
     screen.blit(
         valid_text,
         (
             panel_x + 24,
-            400,
+            431,
         ),
+    )
+
+
+    screen.blit(
+        status_text,
+        (
+            panel_x + 24,
+            470,
+        ),
+    )
+
+
+    # --------------------------------------------------
+    # DRAW DEVELOPMENT CONTROLS
+    # --------------------------------------------------
+
+    screen.blit(
+        dev_controls_text,
+        (
+            panel_x + 20,
+            505,
+        ),
+    )
+
+
+    draw_button(
+        screen,
+        reset_turn_rect,
+        "RESET TURN",
+        small_font,
+        mouse_position,
+    )
+
+
+    draw_button(
+        screen,
+        reset_player_rect,
+        "RESET PLAYER",
+        small_font,
+        mouse_position,
+    )
+
+
+    draw_button(
+        screen,
+        energy_down_rect,
+        "ENERGY -10",
+        small_font,
+        mouse_position,
+    )
+
+
+    draw_button(
+        screen,
+        energy_up_rect,
+        "ENERGY +10",
+        small_font,
+        mouse_position,
+    )
+
+
+    draw_button(
+        screen,
+        move_down_rect,
+        "MOVE -1",
+        small_font,
+        mouse_position,
+    )
+
+
+    draw_button(
+        screen,
+        move_up_rect,
+        "MOVE +1",
+        small_font,
+        mouse_position,
     )
 
 
@@ -634,6 +1030,7 @@ while running:
     # --------------------------------------------------
 
     pygame.display.flip()
+
 
     clock.tick(
         cfg.FPS
