@@ -10,6 +10,11 @@ SCREEN_HEIGHT = 760
 
 PANEL_WIDTH = 300
 
+PLAY_AREA_WIDTH = (
+    SCREEN_WIDTH
+    - PANEL_WIDTH
+)
+
 FPS = 60
 
 
@@ -17,10 +22,13 @@ FPS = 60
 # HEX GRID
 # --------------------------------------------------
 
-HEX_SIZE = 24
+HEX_SIZE = 20
 
-GRID_COLUMNS = 20
-GRID_ROWS = 16
+GRID_COLUMNS = 28
+GRID_ROWS = 20
+
+GRID_ORIGIN_X = 40
+GRID_ORIGIN_Y = 40
 
 
 # --------------------------------------------------
