@@ -9,11 +9,12 @@ from map_data import WALL_HEXES
 from hex_grid import (
     HEX_EDGE_NEIGHBORS,
     axial_to_pixel,
-    get_reachable_hex_distances,
+    get_reachable_hex_data,
     hex_corners,
     is_hex_on_map,
     offset_to_axial,
     pixel_to_axial,
+    reconstruct_path,
 )
 
 
@@ -63,6 +64,12 @@ small_font = pygame.font.Font(
 )
 
 
+path_number_font = pygame.font.Font(
+    None,
+    18,
+)
+
+
 # --------------------------------------------------
 # RIGHT INFORMATION PANEL
 # --------------------------------------------------
@@ -74,7 +81,7 @@ panel_x = (
 
 
 # --------------------------------------------------
-# DEVELOPER CONTROLS
+# GAMEPLAY CONTROL
 # --------------------------------------------------
 
 end_turn_rect = pygame.Rect(
@@ -83,6 +90,11 @@ end_turn_rect = pygame.Rect(
     255,
     34,
 )
+
+
+# --------------------------------------------------
+# DEVELOPER CONTROLS
+# --------------------------------------------------
 
 reset_turn_rect = pygame.Rect(
     panel_x + 20,
@@ -113,6 +125,14 @@ move_input_rect = pygame.Rect(
     675,
     255,
     34,
+)
+
+
+path_numbers_rect = pygame.Rect(
+    panel_x + 20,
+    718,
+    255,
+    30,
 )
 
 
@@ -153,6 +173,7 @@ def draw_button(
             cfg.BUTTON_COLOR
         )
 
+
     pygame.draw.rect(
         surface,
         colour,
@@ -160,15 +181,18 @@ def draw_button(
         border_radius=5,
     )
 
+
     label_surface = font_object.render(
         label,
         True,
         cfg.TEXT_COLOR,
     )
 
+
     label_rect = label_surface.get_rect(
         center=rectangle.center
     )
+
 
     surface.blit(
         label_surface,
@@ -195,6 +219,7 @@ def draw_input_box(
         border_radius=5,
     )
 
+
     if active:
 
         border_colour = (
@@ -207,6 +232,7 @@ def draw_input_box(
             cfg.HEX_OUTLINE
         )
 
+
     pygame.draw.rect(
         surface,
         border_colour,
@@ -214,6 +240,7 @@ def draw_input_box(
         2,
         border_radius=5,
     )
+
 
     if text_value:
 
@@ -241,11 +268,13 @@ def draw_input_box(
             cfg.SUBTEXT_COLOR
         )
 
+
     text_surface = font_object.render(
         display_text,
         True,
         text_colour,
     )
+
 
     surface.blit(
         text_surface,
@@ -308,6 +337,7 @@ while running:
 
                     active_input = None
 
+
                 elif (
                     active_input == "move"
                     and
@@ -324,11 +354,13 @@ while running:
 
                     active_input = None
 
+
                 else:
 
                     state.status_message = (
                         "Enter a number first."
                     )
+
 
                 continue
 
@@ -345,11 +377,13 @@ while running:
                         energy_input_text[:-1]
                     )
 
+
                 elif active_input == "move":
 
                     move_input_text = (
                         move_input_text[:-1]
                     )
+
 
                 continue
 
@@ -392,6 +426,7 @@ while running:
                             event.unicode
                         )
 
+
                 elif active_input == "move":
 
                     if (
@@ -404,6 +439,7 @@ while running:
                         move_input_text += (
                             event.unicode
                         )
+
 
                 continue
 
@@ -424,7 +460,7 @@ while running:
 
 
             # ------------------------------------------
-            # RESET TURN
+            # END GAMEPLAY TURN
             # ------------------------------------------
 
             if end_turn_rect.collidepoint(
@@ -518,6 +554,25 @@ while running:
                 continue
 
 
+            # ------------------------------------------
+            # PATH NUMBER TOGGLE
+            # ------------------------------------------
+
+            if path_numbers_rect.collidepoint(
+                clicked_position
+            ):
+
+                active_input = None
+
+                energy_input_text = ""
+
+                move_input_text = ""
+
+                state.toggle_path_numbers()
+
+                continue
+
+
             active_input = None
 
 
@@ -529,10 +584,12 @@ while running:
                 clicked_position
             )
 
+
             clicked_inside_play_area = (
                 clicked_position[0]
                 < cfg.PLAY_AREA_WIDTH
             )
+
 
             if (
                 clicked_inside_play_area
@@ -564,6 +621,7 @@ while running:
                     // cfg.MOVE_ENERGY_COST_PER_HEX
                 )
 
+
                 click_move_range = min(
                     state.movement_remaining,
                     click_energy_limit,
@@ -574,12 +632,13 @@ while running:
                 # BFS REACHABILITY
                 # --------------------------------------
 
-                click_reachable_distances = (
-                    get_reachable_hex_distances(
-                        state.player_position,
-                        click_move_range,
-                        WALL_HEXES,
-                    )
+                (
+                    click_reachable_distances,
+                    click_came_from,
+                ) = get_reachable_hex_data(
+                    state.player_position,
+                    click_move_range,
+                    WALL_HEXES,
                 )
 
 
@@ -601,10 +660,12 @@ while running:
                         ]
                     )
 
+
                     state.move_player_to(
                         clicked_hex,
                         movement_cost,
                     )
+
 
                 elif (
                     clicked_hex
@@ -644,15 +705,18 @@ while running:
         - player_center[0]
     )
 
+
     mouse_dy = (
         mouse_position[1]
         - player_center[1]
     )
 
+
     mouse_distance_from_player = (
         mouse_dx * mouse_dx
         + mouse_dy * mouse_dy
     ) ** 0.5
+
 
     player_is_hovered = (
         mouse_distance_from_player
@@ -669,6 +733,7 @@ while running:
         // cfg.MOVE_ENERGY_COST_PER_HEX
     )
 
+
     current_move_range = min(
         state.movement_remaining,
         energy_move_limit,
@@ -679,13 +744,15 @@ while running:
     # BFS REACHABLE AREA
     # --------------------------------------------------
 
-    reachable_distances = (
-        get_reachable_hex_distances(
-            state.player_position,
-            current_move_range,
-            WALL_HEXES,
-        )
+    (
+        reachable_distances,
+        came_from,
+    ) = get_reachable_hex_data(
+        state.player_position,
+        current_move_range,
+        WALL_HEXES,
     )
+
 
     reachable_hexes = set(
         reachable_distances.keys()
@@ -700,6 +767,7 @@ while running:
         mouse_position
     )
 
+
     mouse_hex_on_map = (
         mouse_position[0]
         < cfg.PLAY_AREA_WIDTH
@@ -708,6 +776,7 @@ while running:
             mouse_hex
         )
     )
+
 
     mouse_hex_blocked = (
         mouse_hex_on_map
@@ -728,6 +797,7 @@ while running:
             )
         )
 
+
         mouse_hex_in_range = (
             not mouse_hex_blocked
             and
@@ -738,11 +808,29 @@ while running:
             in reachable_distances
         )
 
+
     else:
 
         mouse_hex_distance = None
 
         mouse_hex_in_range = False
+
+
+    # --------------------------------------------------
+    # MOVEMENT PATH PREVIEW
+    # --------------------------------------------------
+
+    if mouse_hex_in_range:
+
+        preview_path = reconstruct_path(
+            came_from,
+            state.player_position,
+            mouse_hex,
+        )
+
+    else:
+
+        preview_path = []
 
 
     # --------------------------------------------------
@@ -786,9 +874,11 @@ while running:
                 row,
             )
 
+
             center = axial_to_pixel(
                 hex_position
             )
+
 
             points = hex_corners(
                 center
@@ -837,6 +927,7 @@ while running:
                 points,
             )
 
+
             pygame.draw.polygon(
                 screen,
                 tile_outline,
@@ -855,13 +946,16 @@ while running:
 
             q, r = hex_position
 
+
             center = axial_to_pixel(
                 hex_position
             )
 
+
             points = hex_corners(
                 center
             )
+
 
             for edge_index, (
                 dq,
@@ -875,21 +969,23 @@ while running:
                     r + dr,
                 )
 
-                # Internal reachable edge:
-                # do not draw it.
+
                 if neighbor in reachable_hexes:
 
                     continue
 
+
                 point_a = points[
                     edge_index
                 ]
+
 
                 point_b = points[
                     (
                         edge_index + 1
                     ) % 6
                 ]
+
 
                 pygame.draw.line(
                     screen,
@@ -899,12 +995,141 @@ while running:
                     7,
                 )
 
+
                 pygame.draw.line(
                     screen,
                     cfg.RANGE_GLOW,
                     point_a,
                     point_b,
                     2,
+                )
+
+
+    # --------------------------------------------------
+    # DRAW MOVEMENT PATH PREVIEW
+    # --------------------------------------------------
+
+    if (
+        len(
+            preview_path
+        )
+        > 1
+    ):
+
+        # ----------------------------------------------
+        # CONNECT PATH HEX CENTRES
+        # ----------------------------------------------
+
+        for path_index in range(
+            1,
+            len(
+                preview_path
+            ),
+        ):
+
+            previous_hex = (
+                preview_path[
+                    path_index - 1
+                ]
+            )
+
+
+            current_hex = (
+                preview_path[
+                    path_index
+                ]
+            )
+
+
+            previous_center = axial_to_pixel(
+                previous_hex
+            )
+
+
+            current_center = axial_to_pixel(
+                current_hex
+            )
+
+
+            pygame.draw.line(
+                screen,
+                cfg.PATH_PREVIEW_GLOW,
+                previous_center,
+                current_center,
+                7,
+            )
+
+
+            pygame.draw.line(
+                screen,
+                cfg.PATH_PREVIEW,
+                previous_center,
+                current_center,
+                3,
+            )
+
+
+        # ----------------------------------------------
+        # DRAW STEP MARKERS
+        # ----------------------------------------------
+
+        for step_number, path_hex in enumerate(
+            preview_path[1:],
+            start=1,
+        ):
+
+            path_center = axial_to_pixel(
+                path_hex
+            )
+
+
+            marker_points = hex_corners(
+                path_center,
+                cfg.HEX_SIZE * 0.30,
+            )
+
+
+            pygame.draw.polygon(
+                screen,
+                cfg.PATH_PREVIEW,
+                marker_points,
+            )
+
+
+            # ------------------------------------------
+            # OPTIONAL DEV STEP NUMBERS
+            # ------------------------------------------
+
+            if state.dev_show_path_numbers:
+
+                number_surface = (
+                    path_number_font.render(
+                        str(
+                            step_number
+                        ),
+                        True,
+                        cfg.PATH_NUMBER_COLOR,
+                    )
+                )
+
+
+                number_rect = (
+                    number_surface.get_rect(
+                        center=(
+                            int(
+                                path_center[0]
+                            ),
+                            int(
+                                path_center[1]
+                            ),
+                        )
+                    )
+                )
+
+
+                screen.blit(
+                    number_surface,
+                    number_rect,
                 )
 
 
@@ -923,14 +1148,11 @@ while running:
             mouse_hex
         )
 
+
         hover_points = hex_corners(
             hover_center
         )
 
-
-        # ----------------------------------------------
-        # GREEN: ACTUALLY REACHABLE
-        # ----------------------------------------------
 
         if mouse_hex_in_range:
 
@@ -942,10 +1164,6 @@ while running:
                 cfg.HOVER_VALID_OUTLINE
             )
 
-
-        # ----------------------------------------------
-        # RED: INVALID / WALL / UNREACHABLE
-        # ----------------------------------------------
 
         else:
 
@@ -965,6 +1183,7 @@ while running:
             7,
         )
 
+
         pygame.draw.polygon(
             screen,
             hover_bright_colour,
@@ -982,11 +1201,13 @@ while running:
         cfg.HEX_SIZE * 0.55,
     )
 
+
     pygame.draw.polygon(
         screen,
         cfg.PLAYER_FILL,
         player_points,
     )
+
 
     pygame.draw.polygon(
         screen,
@@ -1007,6 +1228,7 @@ while running:
         cfg.SCREEN_HEIGHT,
     )
 
+
     pygame.draw.rect(
         screen,
         cfg.PANEL_COLOR,
@@ -1024,6 +1246,7 @@ while running:
         cfg.TEXT_COLOR,
     )
 
+
     hp_text = font.render(
         (
             f"HP: "
@@ -1033,6 +1256,7 @@ while running:
         True,
         cfg.TEXT_COLOR,
     )
+
 
     energy_text = font.render(
         (
@@ -1044,6 +1268,7 @@ while running:
         cfg.TEXT_COLOR,
     )
 
+
     position_text = font.render(
         (
             f"HEX: "
@@ -1052,6 +1277,7 @@ while running:
         True,
         cfg.TEXT_COLOR,
     )
+
 
     turn_text = small_font.render(
         (
@@ -1073,6 +1299,7 @@ while running:
         cfg.SUBTEXT_COLOR,
     )
 
+
     hover_text = small_font.render(
         (
             "PLAYER HOVER: "
@@ -1082,6 +1309,7 @@ while running:
         cfg.SUBTEXT_COLOR,
     )
 
+
     range_text = small_font.render(
         (
             "SESSION MAX MOVE: "
@@ -1090,6 +1318,7 @@ while running:
         True,
         cfg.SUBTEXT_COLOR,
     )
+
 
     movement_left_text = small_font.render(
         (
@@ -1101,6 +1330,7 @@ while running:
         True,
         cfg.SUBTEXT_COLOR,
     )
+
 
     current_range_text = small_font.render(
         (
@@ -1136,6 +1366,7 @@ while running:
                 cfg.HOVER_INVALID_OUTLINE,
             )
 
+
         elif mouse_hex_distance is None:
 
             distance_text = small_font.render(
@@ -1143,6 +1374,7 @@ while running:
                 True,
                 cfg.SUBTEXT_COLOR,
             )
+
 
         else:
 
@@ -1164,6 +1396,7 @@ while running:
             cfg.SUBTEXT_COLOR,
         )
 
+
         distance_text = small_font.render(
             "PATH COST: -",
             True,
@@ -1178,6 +1411,7 @@ while running:
             True,
             cfg.HOVER_INVALID_OUTLINE,
         )
+
 
     else:
 
@@ -1208,17 +1442,32 @@ while running:
         cfg.TEXT_COLOR,
     )
 
+
     energy_label_text = small_font.render(
         "SET ENERGY",
         True,
         cfg.TEXT_COLOR,
     )
 
+
     move_label_text = small_font.render(
         "SET MOVE",
         True,
         cfg.TEXT_COLOR,
     )
+
+
+    if state.dev_show_path_numbers:
+
+        path_number_button_label = (
+            "PATH NUMBERS: ON"
+        )
+
+    else:
+
+        path_number_button_label = (
+            "PATH NUMBERS: OFF"
+        )
 
 
     # --------------------------------------------------
@@ -1282,7 +1531,7 @@ while running:
         mouse_position,
     )
 
-    
+
     # --------------------------------------------------
     # DRAW DEBUG INFORMATION
     # --------------------------------------------------
@@ -1380,6 +1629,7 @@ while running:
         ),
     )
 
+
     draw_button(
         screen,
         reset_turn_rect,
@@ -1387,6 +1637,7 @@ while running:
         small_font,
         mouse_position,
     )
+
 
     draw_button(
         screen,
@@ -1396,6 +1647,7 @@ while running:
         mouse_position,
     )
 
+
     screen.blit(
         energy_label_text,
         (
@@ -1403,6 +1655,7 @@ while running:
             582,
         ),
     )
+
 
     draw_input_box(
         screen,
@@ -1412,6 +1665,7 @@ while running:
         small_font,
     )
 
+
     screen.blit(
         move_label_text,
         (
@@ -1419,6 +1673,7 @@ while running:
             652,
         ),
     )
+
 
     draw_input_box(
         screen,
@@ -1429,11 +1684,21 @@ while running:
     )
 
 
+    draw_button(
+        screen,
+        path_numbers_rect,
+        path_number_button_label,
+        small_font,
+        mouse_position,
+    )
+
+
     # --------------------------------------------------
     # FINISH FRAME
     # --------------------------------------------------
 
     pygame.display.flip()
+
 
     clock.tick(
         cfg.FPS

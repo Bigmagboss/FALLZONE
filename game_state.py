@@ -26,6 +26,15 @@ class GameState:
 
 
         # --------------------------------------------------
+        # DEVELOPMENT DISPLAY STATE
+        # --------------------------------------------------
+
+        self.dev_show_path_numbers = (
+            False
+        )
+
+
+        # --------------------------------------------------
         # INITIAL PLAYER STATE
         # --------------------------------------------------
 
@@ -55,6 +64,7 @@ class GameState:
     ):
 
         if movement_cost < 1:
+
             return False
 
 
@@ -143,15 +153,7 @@ class GameState:
         )
 
 
-        # Energy deliberately does NOT refill.
-        #
-        # Later this method can also trigger:
-        #
-        # enemy actions
-        # status effects
-        # cooldowns
-        # environmental effects
-        # start-of-turn logic
+        # Energy deliberately remains unchanged.
 
         self.status_message = (
             f"Turn {self.turn_number} started."
@@ -285,3 +287,28 @@ class GameState:
 
 
         return value
+
+
+    # --------------------------------------------------
+    # TOGGLE PATH STEP NUMBERS - DEV TOOL
+    # --------------------------------------------------
+
+    def toggle_path_numbers(self):
+
+        self.dev_show_path_numbers = (
+            not self.dev_show_path_numbers
+        )
+
+
+        if self.dev_show_path_numbers:
+
+            state_text = "ON"
+
+        else:
+
+            state_text = "OFF"
+
+
+        self.status_message = (
+            f"DEV: path numbers {state_text}."
+        )

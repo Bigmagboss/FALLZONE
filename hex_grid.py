@@ -19,7 +19,7 @@ HEX_DIRECTIONS = (
 )
 
 
-# Same six neighbours, but in the order matching
+# Same six neighbours, but ordered to match
 # the polygon edges produced by hex_corners().
 HEX_EDGE_NEIGHBORS = (
     (1, 0),
@@ -38,6 +38,7 @@ HEX_EDGE_NEIGHBORS = (
 def get_neighbors(
     hex_position
 ):
+
     q, r = hex_position
 
     neighbors = []
@@ -64,6 +65,7 @@ def hex_distance(
     hex_a,
     hex_b,
 ):
+
     q1, r1 = hex_a
     q2, r2 = hex_b
 
@@ -90,6 +92,7 @@ def hexes_within_range(
     center,
     max_distance,
 ):
+
     center_q, center_r = center
 
     reachable = set()
@@ -134,6 +137,7 @@ def axial_round(
     q_float,
     r_float,
 ):
+
     x = q_float
 
     z = r_float
@@ -142,6 +146,7 @@ def axial_round(
         -x
         - z
     )
+
 
     rounded_x = round(
         x
@@ -155,6 +160,7 @@ def axial_round(
         z
     )
 
+
     x_difference = abs(
         rounded_x - x
     )
@@ -167,6 +173,7 @@ def axial_round(
         rounded_z - z
     )
 
+
     if (
         x_difference > y_difference
         and
@@ -178,6 +185,7 @@ def axial_round(
             - rounded_z
         )
 
+
     elif (
         y_difference
         > z_difference
@@ -188,12 +196,14 @@ def axial_round(
             - rounded_z
         )
 
+
     else:
 
         rounded_z = (
             -rounded_x
             - rounded_y
         )
+
 
     return (
         int(rounded_x),
@@ -209,6 +219,7 @@ def offset_to_axial(
     column,
     row,
 ):
+
     q = column
 
     r = (
@@ -232,6 +243,7 @@ def offset_to_axial(
 def axial_to_offset(
     hex_position
 ):
+
     q, r = hex_position
 
     column = q
@@ -257,6 +269,7 @@ def axial_to_offset(
 def is_hex_on_map(
     hex_position
 ):
+
     column, row = axial_to_offset(
         hex_position
     )
@@ -276,21 +289,37 @@ def is_hex_on_map(
 # BFS OBSTACLE-AWARE REACHABILITY
 # --------------------------------------------------
 
-def get_reachable_hex_distances(
+def get_reachable_hex_data(
     start,
     max_steps,
     blocked_hexes,
 ):
 
+    # Distance from player to each discovered hex.
     distances = {
         start: 0
     }
+
+
+    # Stores which hex led to each discovered hex.
+    #
+    # Example:
+    #
+    # came_from[(12, 4)] = (11, 4)
+    #
+    # This lets us reconstruct the actual route later.
+
+    came_from = {
+        start: None
+    }
+
 
     frontier = deque(
         [
             start
         ]
     )
+
 
     while frontier:
 
@@ -302,44 +331,150 @@ def get_reachable_hex_distances(
             ]
         )
 
+
+        # Do not search beyond available movement.
+
         if (
             current_distance
             >= max_steps
         ):
+
             continue
+
 
         for neighbor in get_neighbors(
             current
         ):
 
-            # Wall or other blocked tile.
+            # ------------------------------------------
+            # BLOCKED HEX
+            # ------------------------------------------
+
             if neighbor in blocked_hexes:
+
                 continue
 
-            # Outside visible map.
+
+            # ------------------------------------------
+            # OUTSIDE MAP
+            # ------------------------------------------
+
             if not is_hex_on_map(
                 neighbor
             ):
+
                 continue
 
-            # Already found by a shorter path.
+
+            # ------------------------------------------
+            # ALREADY DISCOVERED
+            # ------------------------------------------
+
             if neighbor in distances:
+
                 continue
+
 
             next_distance = (
                 current_distance
                 + 1
             )
 
+
             distances[
                 neighbor
             ] = next_distance
+
+
+            came_from[
+                neighbor
+            ] = current
+
 
             frontier.append(
                 neighbor
             )
 
+
+    return (
+        distances,
+        came_from,
+    )
+
+
+# --------------------------------------------------
+# DISTANCE-ONLY BFS COMPATIBILITY FUNCTION
+# --------------------------------------------------
+
+def get_reachable_hex_distances(
+    start,
+    max_steps,
+    blocked_hexes,
+):
+
+    distances, _ = (
+        get_reachable_hex_data(
+            start,
+            max_steps,
+            blocked_hexes,
+        )
+    )
+
     return distances
+
+
+# --------------------------------------------------
+# RECONSTRUCT BFS PATH
+# --------------------------------------------------
+
+def reconstruct_path(
+    came_from,
+    start,
+    destination,
+):
+
+    if destination not in came_from:
+
+        return []
+
+
+    path = []
+
+    current = (
+        destination
+    )
+
+
+    while current is not None:
+
+        path.append(
+            current
+        )
+
+
+        if current == start:
+
+            break
+
+
+        current = came_from.get(
+            current
+        )
+
+
+    if (
+        not path
+        or
+        path[-1] != start
+    ):
+
+        return []
+
+
+    path.reverse()
+
+
+    return path
 
 
 # --------------------------------------------------
@@ -349,6 +484,7 @@ def get_reachable_hex_distances(
 def axial_to_pixel(
     hex_position
 ):
+
     q, r = hex_position
 
     x = (
@@ -379,6 +515,7 @@ def axial_to_pixel(
 def pixel_to_axial(
     pixel_position
 ):
+
     pixel_x, pixel_y = (
         pixel_position
     )
@@ -393,6 +530,7 @@ def pixel_to_axial(
         - cfg.GRID_ORIGIN_Y
     )
 
+
     q_float = (
         (
             2 / 3
@@ -400,6 +538,7 @@ def pixel_to_axial(
         * local_x
         / cfg.HEX_SIZE
     )
+
 
     r_float = (
         (
@@ -415,6 +554,7 @@ def pixel_to_axial(
         / cfg.HEX_SIZE
     )
 
+
     return axial_round(
         q_float,
         r_float,
@@ -429,7 +569,9 @@ def hex_corners(
     center,
     size=None,
 ):
+
     center_x, center_y = center
+
 
     if size is None:
 
@@ -437,7 +579,9 @@ def hex_corners(
             cfg.HEX_SIZE
         )
 
+
     points = []
+
 
     for corner in range(6):
 
@@ -445,11 +589,13 @@ def hex_corners(
             60 * corner
         )
 
+
         angle_radians = (
             math.radians(
                 angle_degrees
             )
         )
+
 
         point_x = (
             center_x
@@ -459,6 +605,7 @@ def hex_corners(
             )
         )
 
+
         point_y = (
             center_y
             + size
@@ -467,11 +614,13 @@ def hex_corners(
             )
         )
 
+
         points.append(
             (
                 point_x,
                 point_y,
             )
         )
+
 
     return points
