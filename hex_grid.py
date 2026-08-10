@@ -148,6 +148,75 @@ def get_weighted_reachable_hex_data(
     return costs, came_from
 
 
+def find_weighted_path_to_targets(
+    start,
+    targets,
+    blocked_hexes,
+    terrain_costs,
+):
+    valid_targets = {
+        target
+        for target in targets
+        if is_hex_on_map(target)
+        and (target not in blocked_hexes or target == start)
+    }
+
+    if not valid_targets:
+        return [], None, None
+
+    costs = {start: 0}
+    came_from = {start: None}
+    frontier = [(0, start)]
+
+    while frontier:
+        current_cost, current = heapq.heappop(frontier)
+
+        if current_cost != costs.get(current):
+            continue
+
+        if current in valid_targets:
+            path = reconstruct_path(
+                came_from,
+                start,
+                current,
+            )
+            return path, current_cost, current
+
+        for neighbor in get_neighbors(current):
+            if neighbor in blocked_hexes:
+                continue
+
+            if not is_hex_on_map(neighbor):
+                continue
+
+            step_cost = terrain_costs.get(
+                neighbor,
+                1,
+            )
+
+            new_cost = (
+                current_cost
+                + step_cost
+            )
+
+            if (
+                neighbor not in costs
+                or new_cost < costs[neighbor]
+            ):
+                costs[neighbor] = new_cost
+                came_from[neighbor] = current
+
+                heapq.heappush(
+                    frontier,
+                    (
+                        new_cost,
+                        neighbor,
+                    ),
+                )
+
+    return [], None, None
+
+
 def reconstruct_path(came_from, start, destination):
     if destination not in came_from:
         return []

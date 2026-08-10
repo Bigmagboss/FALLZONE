@@ -15,6 +15,8 @@ from game_state import GameState
 from hex_grid import (
     HEX_EDGE_NEIGHBORS,
     axial_to_pixel,
+    find_weighted_path_to_targets,
+    get_neighbors,
     get_weighted_reachable_hex_data,
     hex_corners,
     is_hex_on_map,
@@ -64,6 +66,14 @@ movement_path = []
 movement_path_index = 1
 movement_last_step_time = 0
 
+enemy_turn_order = []
+enemy_turn_index = 0
+active_enemy = None
+enemy_path = []
+enemy_path_index = 1
+enemy_path_total_cost = None
+enemy_last_step_time = 0
+
 active_input = None
 energy_input_text = ""
 move_input_text = ""
@@ -72,7 +82,7 @@ map_name_input_text = ""
 
 
 # GAME UI
-end_turn_rect = pygame.Rect(panel_x + 20, 212, 255, 34)
+end_turn_rect = pygame.Rect(panel_x + 20, 220, 255, 34)
 reset_turn_rect = pygame.Rect(panel_x + 20, 530, 120, 28)
 reset_player_rect = pygame.Rect(panel_x + 155, 530, 120, 28)
 energy_input_rect = pygame.Rect(panel_x + 20, 584, 255, 28)
@@ -202,6 +212,100 @@ def rebuild_session_entities():
     session_entities = create_entities_from_spawns(map_state.get_entity_spawn_data())
 
 
+def clear_enemy_phase_state():
+    global enemy_turn_order, enemy_turn_index, active_enemy
+    global enemy_path, enemy_path_index, enemy_path_total_cost, enemy_last_step_time
+
+    enemy_turn_order = []
+    enemy_turn_index = 0
+    active_enemy = None
+    enemy_path = []
+    enemy_path_index = 1
+    enemy_path_total_cost = None
+    enemy_last_step_time = 0
+
+
+def prepare_next_enemy_action():
+    global enemy_turn_index, active_enemy
+    global enemy_path, enemy_path_index, enemy_path_total_cost, enemy_last_step_time
+
+    while state.phase == "enemy" and active_enemy is None:
+        if enemy_turn_index >= len(enemy_turn_order):
+            clear_enemy_phase_state()
+            state.finish_enemy_phase()
+            return
+
+        enemy = enemy_turn_order[enemy_turn_index]
+        blocked_hexes = (
+            map_state.wall_hexes
+            | blocked_entity_positions(session_entities, exclude=enemy)
+            | {state.player_position}
+        )
+        targets = set(get_neighbors(state.player_position))
+        terrain_costs = map_state.get_terrain_move_costs()
+
+        path, total_cost, _ = find_weighted_path_to_targets(
+            enemy.position,
+            targets,
+            blocked_hexes,
+            terrain_costs,
+        )
+
+        if not path:
+            state.status_message = f"{enemy.entity_id}: no path to player."
+            enemy_turn_index += 1
+            continue
+
+        if len(path) <= 1:
+            state.status_message = f"{enemy.entity_id}: already next to player."
+            enemy_turn_index += 1
+            continue
+
+        active_enemy = enemy
+        enemy_path = path
+        enemy_path_index = 1
+        enemy_path_total_cost = total_cost
+        enemy_last_step_time = pygame.time.get_ticks()
+        state.status_message = (
+            f"{enemy.entity_id}: route cost {total_cost}; moving."
+        )
+
+
+def finish_active_enemy(message):
+    global enemy_turn_index, active_enemy
+    global enemy_path, enemy_path_index, enemy_path_total_cost
+
+    state.status_message = message
+    active_enemy = None
+    enemy_path = []
+    enemy_path_index = 1
+    enemy_path_total_cost = None
+    enemy_turn_index += 1
+    prepare_next_enemy_action()
+
+
+def start_enemy_phase():
+    global enemy_turn_order, enemy_turn_index
+
+    if not state.end_turn():
+        return
+
+    enemy_turn_order = sorted(
+        (
+            entity
+            for entity in session_entities
+            if entity.entity_type == "enemy"
+        ),
+        key=lambda entity: entity.entity_id,
+    )
+    enemy_turn_index = 0
+
+    for enemy in enemy_turn_order:
+        enemy.reset_turn_movement()
+
+    prepare_next_enemy_action()
+
+
 def terrain_name_and_cost(hex_position):
     terrain = map_state.terrain_at(hex_position)
     names = {
@@ -231,32 +335,18 @@ def draw_actor(surface, position, fill, outline):
         (anchor_x, anchor_y),
         cfg.ACTOR_ANCHOR_RADIUS,
     )
-
     pygame.draw.line(
         surface,
         outline,
-        (
-            anchor_x - cfg.ACTOR_LEG_OFFSET_X,
-            anchor_y - 2,
-        ),
-        (
-            anchor_x - 3,
-            body_bottom,
-        ),
+        (anchor_x - cfg.ACTOR_LEG_OFFSET_X, anchor_y - 2),
+        (anchor_x - 3, body_bottom),
         2,
     )
-
     pygame.draw.line(
         surface,
         outline,
-        (
-            anchor_x + cfg.ACTOR_LEG_OFFSET_X,
-            anchor_y - 2,
-        ),
-        (
-            anchor_x + 3,
-            body_bottom,
-        ),
+        (anchor_x + cfg.ACTOR_LEG_OFFSET_X, anchor_y - 2),
+        (anchor_x + 3, body_bottom),
         2,
     )
 
@@ -266,129 +356,31 @@ def draw_actor(surface, position, fill, outline):
         cfg.ACTOR_BODY_WIDTH,
         cfg.ACTOR_BODY_HEIGHT,
     )
-
-    pygame.draw.rect(
-        surface,
-        fill,
-        body_rect,
-        border_radius=3,
-    )
-
-    pygame.draw.rect(
-        surface,
-        outline,
-        body_rect,
-        2,
-        border_radius=3,
-    )
-
-    pygame.draw.circle(
-        surface,
-        fill,
-        (
-            anchor_x,
-            head_y,
-        ),
-        cfg.ACTOR_HEAD_RADIUS,
-    )
-
-    pygame.draw.circle(
-        surface,
-        outline,
-        (
-            anchor_x,
-            head_y,
-        ),
-        cfg.ACTOR_HEAD_RADIUS,
-        2,
-    )
+    pygame.draw.rect(surface, fill, body_rect, border_radius=3)
+    pygame.draw.rect(surface, outline, body_rect, 2, border_radius=3)
+    pygame.draw.circle(surface, fill, (anchor_x, head_y), cfg.ACTOR_HEAD_RADIUS)
+    pygame.draw.circle(surface, outline, (anchor_x, head_y), cfg.ACTOR_HEAD_RADIUS, 2)
 
 
-def draw_entity_marker(
-    surface,
-    entity,
-    editor=False,
-):
-
-    definition = (
-        entity.definition
-    )
-
-    anchor_x, anchor_y = (
-        axial_to_pixel(
-            entity.position
-        )
-    )
-
-    anchor_x = int(
-        anchor_x
-    )
-
-    anchor_y = int(
-        anchor_y
-    )
+def draw_entity_marker(surface, entity, editor=False):
+    definition = entity.definition
+    anchor_x, anchor_y = axial_to_pixel(entity.position)
+    anchor_x = int(anchor_x)
+    anchor_y = int(anchor_y)
 
     if editor:
-
-        pygame.draw.circle(
-            surface,
-            definition.fill,
-            (
-                anchor_x,
-                anchor_y,
-            ),
-            9,
-        )
-
-        pygame.draw.circle(
-            surface,
-            definition.outline,
-            (
-                anchor_x,
-                anchor_y,
-            ),
-            9,
-            2,
-        )
-
-        label = tiny_font.render(
-            definition.short_label,
-            True,
-            cfg.ENEMY_LABEL,
-        )
-
-        surface.blit(
-            label,
-            label.get_rect(
-                center=(
-                    anchor_x,
-                    anchor_y,
-                )
-            ),
-        )
-
+        pygame.draw.circle(surface, definition.fill, (anchor_x, anchor_y), 9)
+        pygame.draw.circle(surface, definition.outline, (anchor_x, anchor_y), 9, 2)
+        label = tiny_font.render(definition.short_label, True, cfg.ENEMY_LABEL)
+        surface.blit(label, label.get_rect(center=(anchor_x, anchor_y)))
         return
 
-    draw_actor(
-        surface,
-        entity.position,
-        definition.fill,
-        definition.outline,
-    )
+    draw_actor(surface, entity.position, definition.fill, definition.outline)
 
 
-def actor_sort_key(
-    position,
-):
-
-    x, y = axial_to_pixel(
-        position
-    )
-
-    return (
-        y,
-        x,
-    )
+def actor_sort_key(position):
+    x, y = axial_to_pixel(position)
+    return (y, x)
 
 
 def draw_map_terrain():
@@ -672,7 +664,10 @@ while running:
         if reset_player_rect.collidepoint(clicked_position):
             cancel_movement()
             clear_text_inputs()
-            state.reset_player()
+            clear_enemy_phase_state()
+            state.start_new_game_session(map_state.player_start)
+            rebuild_session_entities()
+            state.status_message = "DEV: session actors reset."
             continue
 
         if path_numbers_rect.collidepoint(clicked_position):
@@ -681,7 +676,9 @@ while running:
             continue
 
         if map_editor_rect.collidepoint(clicked_position):
-            if movement_active:
+            if state.phase == "enemy":
+                state.status_message = "Wait for enemy phase to finish before editing."
+            elif movement_active:
                 state.status_message = "Wait for movement to finish before editing."
             else:
                 clear_text_inputs()
@@ -700,13 +697,17 @@ while running:
             state.status_message = "Type movement speed in ms and press Enter."
             continue
 
+        if state.phase == "enemy":
+            state.status_message = "Enemy phase in progress."
+            continue
+
         if movement_active:
             state.status_message = "Wait for movement to finish."
             continue
 
         if end_turn_rect.collidepoint(clicked_position):
             clear_text_inputs()
-            state.end_turn()
+            start_enemy_phase()
             continue
 
         if reset_turn_rect.collidepoint(clicked_position):
@@ -785,7 +786,7 @@ while running:
                 editor_pending_new_blank = False
 
     # MOVEMENT UPDATE
-    if not editor_mode and movement_active:
+    if not editor_mode and state.phase == "player" and movement_active:
         current_time = pygame.time.get_ticks()
         if current_time - movement_last_step_time >= state.session_move_step_ms:
             next_hex = movement_path[movement_path_index]
@@ -800,6 +801,36 @@ while running:
             else:
                 cancel_movement()
                 state.status_message = "Movement stopped: insufficient resources."
+
+    # ENEMY MOVEMENT UPDATE
+    if not editor_mode and state.phase == "enemy":
+        if active_enemy is None:
+            prepare_next_enemy_action()
+
+        if active_enemy is not None:
+            current_time = pygame.time.get_ticks()
+
+            if current_time - enemy_last_step_time >= state.session_move_step_ms:
+                next_hex = enemy_path[enemy_path_index]
+                step_cost = map_state.get_terrain_move_costs().get(next_hex, 1)
+
+                if active_enemy.move_to(next_hex, step_cost):
+                    enemy_path_index += 1
+                    enemy_last_step_time = current_time
+                    state.status_message = (
+                        f"{active_enemy.entity_id}: "
+                        f"M {active_enemy.movement_remaining}/{active_enemy.max_movement} "
+                        f"E {active_enemy.energy}/{active_enemy.max_energy}"
+                    )
+
+                    if enemy_path_index >= len(enemy_path):
+                        enemy_id = active_enemy.entity_id
+                        finish_active_enemy(f"{enemy_id}: reached best approach hex.")
+                else:
+                    enemy_id = active_enemy.entity_id
+                    finish_active_enemy(
+                        f"{enemy_id}: turn movement/energy limit reached."
+                    )
 
     # CURRENT VISUAL DATA
     terrain_move_costs = map_state.get_terrain_move_costs()
@@ -821,39 +852,42 @@ while running:
     mouse_entity = None
 
     if not editor_mode:
-        dx = mouse_position[0] - player_center[0]
-        dy = mouse_position[1] - player_center[1]
-        player_is_hovered = math.hypot(dx, dy) <= cfg.HEX_SIZE * 0.55
-
-        energy_limit = state.player_energy // cfg.MOVE_ENERGY_COST_PER_HEX
-        current_move_budget = min(state.movement_remaining, energy_limit)
-        blocked_hexes = map_state.wall_hexes | blocked_entity_positions(session_entities)
-
-        reachable_costs, came_from = get_weighted_reachable_hex_data(
-            state.player_position,
-            current_move_budget,
-            blocked_hexes,
-            terrain_move_costs,
-        )
-        reachable_hexes = set(reachable_costs)
-
         if mouse_hex_on_map:
             mouse_entity = find_entity_at(session_entities, mouse_hex)
-            mouse_path_cost = reachable_costs.get(mouse_hex)
-            mouse_hex_in_range = (
-                mouse_hex != state.player_position
-                and mouse_hex not in blocked_hexes
-                and mouse_hex in reachable_costs
+
+        if state.phase == "player":
+            dx = mouse_position[0] - player_center[0]
+            dy = mouse_position[1] - player_center[1]
+            player_is_hovered = math.hypot(dx, dy) <= cfg.HEX_SIZE * 0.55
+
+            energy_limit = state.player_energy // cfg.MOVE_ENERGY_COST_PER_HEX
+            current_move_budget = min(state.movement_remaining, energy_limit)
+            blocked_hexes = map_state.wall_hexes | blocked_entity_positions(session_entities)
+
+            reachable_costs, came_from = get_weighted_reachable_hex_data(
+                state.player_position,
+                current_move_budget,
+                blocked_hexes,
+                terrain_move_costs,
             )
+            reachable_hexes = set(reachable_costs)
 
-        if mouse_hex_in_range and not movement_active:
-            preview_path = reconstruct_path(came_from, state.player_position, mouse_hex)
+            if mouse_hex_on_map:
+                mouse_path_cost = reachable_costs.get(mouse_hex)
+                mouse_hex_in_range = (
+                    mouse_hex != state.player_position
+                    and mouse_hex not in blocked_hexes
+                    and mouse_hex in reachable_costs
+                )
 
-        show_movement_perimeter = (
-            not movement_active
-            and current_move_budget > 0
-            and (player_is_hovered or mouse_hex_in_range)
-        )
+            if mouse_hex_in_range and not movement_active:
+                preview_path = reconstruct_path(came_from, state.player_position, mouse_hex)
+
+            show_movement_perimeter = (
+                not movement_active
+                and current_move_budget > 0
+                and (player_is_hovered or mouse_hex_in_range)
+            )
 
     # DRAW MAP
     screen.fill(cfg.BACKGROUND)
@@ -897,44 +931,39 @@ while running:
             pygame.draw.polygon(screen, soft, hover_points, 7)
             pygame.draw.polygon(screen, bright, hover_points, 2)
 
-        for entity in sorted(session_entities, key=lambda item: axial_to_pixel(item.position)[1]):
-            draw_entity_marker(screen, entity)
+        if state.phase == "enemy" and len(enemy_path) > 1:
+            visible_enemy_path = enemy_path[max(0, enemy_path_index - 1):]
+            for index in range(1, len(visible_enemy_path)):
+                previous_center = axial_to_pixel(visible_enemy_path[index - 1])
+                current_center = axial_to_pixel(visible_enemy_path[index])
+                pygame.draw.line(
+                    screen,
+                    cfg.ENEMY_PATH_GLOW,
+                    previous_center,
+                    current_center,
+                    6,
+                )
+                pygame.draw.line(
+                    screen,
+                    cfg.ENEMY_PATH,
+                    previous_center,
+                    current_center,
+                    2,
+                )
 
         actors_to_draw = [
-            (
-                state.player_position,
-                cfg.PLAYER_FILL,
-                cfg.PLAYER_OUTLINE,
-            )
+            (state.player_position, cfg.PLAYER_FILL, cfg.PLAYER_OUTLINE)
         ]
-
         actors_to_draw.extend(
-            (
-                entity.position,
-                entity.definition.fill,
-                entity.definition.outline,
-            )
+            (entity.position, entity.definition.fill, entity.definition.outline)
             for entity in session_entities
         )
 
-        for (
-            position,
-            fill,
-            outline,
-        ) in sorted(
+        for position, fill, outline in sorted(
             actors_to_draw,
-            key=lambda actor:
-            actor_sort_key(
-                actor[0]
-            ),
+            key=lambda actor: actor_sort_key(actor[0]),
         ):
-
-            draw_actor(
-                screen,
-                position,
-                fill,
-                outline,
-            )
+            draw_actor(screen, position, fill, outline)
 
     else:
         pygame.draw.rect(
@@ -1119,14 +1148,21 @@ while running:
         )
         position_text = font.render(f"HEX: {state.player_position}", True, cfg.TEXT_COLOR)
         turn_text = small_font.render(f"TURN: {state.turn_number}", True, cfg.TEXT_COLOR)
+        phase_text = tiny_font.render(
+            f"PHASE: {state.phase.upper()}",
+            True,
+            cfg.ENEMY_PATH if state.phase == "enemy" else cfg.SUBTEXT_COLOR,
+        )
 
         screen.blit(title, (panel_x + 24, 26))
         screen.blit(map_text, (panel_x + 24, 60))
         screen.blit(hp_text, (panel_x + 24, 88))
         screen.blit(energy_text, (panel_x + 24, 120))
         screen.blit(position_text, (panel_x + 24, 152))
-        screen.blit(turn_text, (panel_x + 24, 186))
-        draw_button(screen, end_turn_rect, "END TURN", small_font, mouse_position)
+        screen.blit(turn_text, (panel_x + 24, 182))
+        screen.blit(phase_text, (panel_x + 24, 204))
+        end_label = "END TURN" if state.phase == "player" else "ENEMY PHASE"
+        draw_button(screen, end_turn_rect, end_label, small_font, mouse_position)
 
         if mouse_hex_on_map:
             terrain_name, terrain_cost = terrain_name_and_cost(mouse_hex)
@@ -1153,9 +1189,24 @@ while running:
             path_text = f"PATH COST: {mouse_path_cost}"
 
         terrain_text = f"TERRAIN: {terrain_name}" if terrain_cost is None else f"TERRAIN: {terrain_name} ({terrain_cost})"
+
+        if active_enemy is None:
+            ai_text = "AI: -"
+            ai_resource_text = "AI RESOURCES: -"
+        else:
+            ai_text = (
+                f"AI: {active_enemy.entity_id} ROUTE {enemy_path_total_cost}"
+            )
+            ai_resource_text = (
+                f"AI MOVE {active_enemy.movement_remaining}/{active_enemy.max_movement} "
+                f"ENERGY {active_enemy.energy}/{active_enemy.max_energy}"
+            )
+
         debug_lines = (
             "DEVELOPMENT BUILD",
-            f"PLAYER HOVER: {player_is_hovered}",
+            f"PHASE: {state.phase.upper()}",
+            ai_text,
+            ai_resource_text,
             f"SESSION MAX MOVE: {state.session_max_move_range}",
             f"MOVE LEFT: {state.movement_remaining} / {state.session_max_move_range}",
             f"CURRENT BUDGET: {current_move_budget}",
@@ -1165,7 +1216,7 @@ while running:
             f"ENTITY: {entity_text}",
             state.status_message,
         )
-        debug_y = (264, 284, 304, 324, 344, 374, 394, 414, 434, 462)
+        debug_y = (266, 284, 302, 320, 338, 356, 374, 392, 410, 428, 446, 466)
 
         for line, y in zip(debug_lines, debug_y):
             colour = cfg.HOVER_INVALID_OUTLINE if "BLOCKED" in line or "OCCUPIED" in line else cfg.SUBTEXT_COLOR

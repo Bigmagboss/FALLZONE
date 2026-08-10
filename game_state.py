@@ -8,6 +8,7 @@ class GameState:
         self.session_move_step_ms = cfg.MOVE_STEP_MS
         self.session_player_start = cfg.PLAYER_START
         self.turn_number = 1
+        self.phase = "player"
         self.dev_show_path_numbers = False
         self.reset_player()
 
@@ -35,26 +36,68 @@ class GameState:
         self.status_message = f"Entered {destination}; cost {movement_cost}."
         return True
 
-    def start_new_game_session(self, player_start):
-        self.session_player_start = tuple(player_start)
+    def start_new_game_session(
+            self,
+            player_start,
+    ):
+        self.session_player_start = tuple(
+            player_start
+        )
+
         self.turn_number = 1
+        self.phase = "player"
+
         self.reset_player()
-        self.status_message = "Game session started from current map."
+
+        self.status_message = (
+            "Game session started from current map."
+        )
 
     def end_turn(self):
+        if self.phase != "player":
+            return False
+
+        self.phase = "enemy"
+
+        self.status_message = (
+            "Enemy phase started."
+        )
+
+        return True
+
+    def finish_enemy_phase(self):
         self.turn_number += 1
-        self.movement_remaining = self.session_max_move_range
-        self.status_message = f"Turn {self.turn_number} started."
+
+        self.phase = "player"
+
+        self.movement_remaining = (
+            self.session_max_move_range
+        )
+
+        self.status_message = (
+            f"Turn {self.turn_number} started."
+        )
 
     def reset_turn(self):
-        self.movement_remaining = self.session_max_move_range
-        self.status_message = "DEV: movement budget reset."
+        if self.phase != "player":
+            return False
+
+        self.movement_remaining = (
+            self.session_max_move_range
+        )
+
+        self.status_message = (
+            "DEV: movement budget reset."
+        )
+
+        return True
 
     def reset_player(self):
         self.player_q, self.player_r = self.session_player_start
         self.player_hp = cfg.MAX_HP
         self.player_energy = self.session_max_energy
         self.movement_remaining = self.session_max_move_range
+        self.phase = "player"
         self.status_message = "Player reset."
 
     def set_session_energy(self, value):
