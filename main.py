@@ -77,6 +77,13 @@ panel_x = (
 # DEVELOPER CONTROLS
 # --------------------------------------------------
 
+end_turn_rect = pygame.Rect(
+    panel_x + 20,
+    205,
+    255,
+    34,
+)
+
 reset_turn_rect = pygame.Rect(
     panel_x + 20,
     535,
@@ -414,6 +421,25 @@ while running:
             clicked_position = (
                 event.pos
             )
+
+
+            # ------------------------------------------
+            # RESET TURN
+            # ------------------------------------------
+
+            if end_turn_rect.collidepoint(
+                clicked_position
+            ):
+
+                active_input = None
+
+                energy_input_text = ""
+
+                move_input_text = ""
+
+                state.end_turn()
+
+                continue
 
 
             # ------------------------------------------
@@ -1027,6 +1053,15 @@ while running:
         cfg.TEXT_COLOR,
     )
 
+    turn_text = small_font.render(
+        (
+            "TURN: "
+            f"{state.turn_number}"
+        ),
+        True,
+        cfg.TEXT_COLOR,
+    )
+
 
     # --------------------------------------------------
     # DEBUG TEXT
@@ -1198,31 +1233,56 @@ while running:
         ),
     )
 
+
     screen.blit(
         hp_text,
         (
             panel_x + 24,
-            90,
+            80,
         ),
     )
+
 
     screen.blit(
         energy_text,
         (
             panel_x + 24,
-            130,
+            115,
         ),
     )
+
 
     screen.blit(
         position_text,
         (
             panel_x + 24,
-            170,
+            150,
         ),
     )
 
 
+    screen.blit(
+        turn_text,
+        (
+            panel_x + 24,
+            185,
+        ),
+    )
+
+
+    # --------------------------------------------------
+    # DRAW GAMEPLAY CONTROL
+    # --------------------------------------------------
+
+    draw_button(
+        screen,
+        end_turn_rect,
+        "END TURN",
+        small_font,
+        mouse_position,
+    )
+
+    
     # --------------------------------------------------
     # DRAW DEBUG INFORMATION
     # --------------------------------------------------
@@ -1231,71 +1291,79 @@ while running:
         debug_title,
         (
             panel_x + 24,
-            220,
+            255,
         ),
     )
+
 
     screen.blit(
         hover_text,
         (
             panel_x + 24,
-            250,
+            282,
         ),
     )
+
 
     screen.blit(
         range_text,
         (
             panel_x + 24,
-            278,
+            310,
         ),
     )
+
 
     screen.blit(
         movement_left_text,
         (
             panel_x + 24,
-            306,
+            338,
         ),
     )
+
 
     screen.blit(
         current_range_text,
         (
             panel_x + 24,
-            334,
+            366,
         ),
     )
+
 
     screen.blit(
         mouse_hex_text,
         (
             panel_x + 24,
-            375,
+            404,
         ),
     )
+
 
     screen.blit(
         distance_text,
         (
             panel_x + 24,
-            403,
+            432,
         ),
     )
+
 
     screen.blit(
         valid_text,
         (
             panel_x + 24,
-            431,
+            460,
         ),
     )
+
 
     screen.blit(
         status_text,
         (
             panel_x + 24,
-            470,
+            488,
         ),
     )
 

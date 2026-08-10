@@ -5,10 +5,9 @@ class GameState:
 
     def __init__(self):
 
-        # Developer-overridable values.
-        #
-        # They begin with the normal settings values
-        # whenever FALLZONE is launched.
+        # --------------------------------------------------
+        # SESSION SETTINGS
+        # --------------------------------------------------
 
         self.session_max_energy = (
             cfg.MAX_ENERGY
@@ -17,6 +16,18 @@ class GameState:
         self.session_max_move_range = (
             cfg.MAX_MOVE_RANGE
         )
+
+
+        # --------------------------------------------------
+        # TURN STATE
+        # --------------------------------------------------
+
+        self.turn_number = 1
+
+
+        # --------------------------------------------------
+        # INITIAL PLAYER STATE
+        # --------------------------------------------------
 
         self.reset_player()
 
@@ -46,20 +57,24 @@ class GameState:
         if movement_cost < 1:
             return False
 
+
         enough_movement = (
             movement_cost
             <= self.movement_remaining
         )
+
 
         energy_cost = (
             movement_cost
             * cfg.MOVE_ENERGY_COST_PER_HEX
         )
 
+
         enough_energy = (
             energy_cost
             <= self.player_energy
         )
+
 
         return (
             enough_movement
@@ -84,32 +99,67 @@ class GameState:
 
             return False
 
+
         energy_cost = (
             movement_cost
             * cfg.MOVE_ENERGY_COST_PER_HEX
         )
 
+
         self.player_q, self.player_r = (
             destination
         )
+
 
         self.movement_remaining -= (
             movement_cost
         )
 
+
         self.player_energy -= (
             energy_cost
         )
+
 
         self.status_message = (
             f"Moved {movement_cost} hex(es)."
         )
 
+
         return True
 
 
     # --------------------------------------------------
-    # RESET MOVEMENT ONLY
+    # END GAMEPLAY TURN
+    # --------------------------------------------------
+
+    def end_turn(self):
+
+        self.turn_number += 1
+
+
+        self.movement_remaining = (
+            self.session_max_move_range
+        )
+
+
+        # Energy deliberately does NOT refill.
+        #
+        # Later this method can also trigger:
+        #
+        # enemy actions
+        # status effects
+        # cooldowns
+        # environmental effects
+        # start-of-turn logic
+
+        self.status_message = (
+            f"Turn {self.turn_number} started."
+        )
+
+
+    # --------------------------------------------------
+    # RESET MOVEMENT ONLY - DEV TOOL
     # --------------------------------------------------
 
     def reset_turn(self):
@@ -118,13 +168,14 @@ class GameState:
             self.session_max_move_range
         )
 
+
         self.status_message = (
-            "Movement budget reset."
+            "DEV: movement budget reset."
         )
 
 
     # --------------------------------------------------
-    # RESET PLAYER
+    # RESET PLAYER - DEV TOOL
     # --------------------------------------------------
 
     def reset_player(self):
@@ -133,17 +184,21 @@ class GameState:
             cfg.PLAYER_START
         )
 
+
         self.player_hp = (
             cfg.MAX_HP
         )
+
 
         self.player_energy = (
             self.session_max_energy
         )
 
+
         self.movement_remaining = (
             self.session_max_move_range
         )
+
 
         self.status_message = (
             "Player reset."
@@ -163,6 +218,7 @@ class GameState:
             value
         )
 
+
         value = max(
             cfg.DEV_MIN_ENERGY,
             min(
@@ -171,24 +227,21 @@ class GameState:
             ),
         )
 
-        # This is an overwrite, not addition.
-        #
-        # Example:
-        # current energy = 1
-        # developer enters 5
-        # new energy = 5
 
         self.session_max_energy = (
             value
         )
 
+
         self.player_energy = (
             value
         )
 
+
         self.status_message = (
             f"Energy set to {value}."
         )
+
 
         return value
 
@@ -206,6 +259,7 @@ class GameState:
             value
         )
 
+
         value = max(
             cfg.DEV_MIN_MOVE_RANGE,
             min(
@@ -214,20 +268,20 @@ class GameState:
             ),
         )
 
-        # This also overwrites the currently available
-        # movement so the new value is immediately
-        # testable.
 
         self.session_max_move_range = (
             value
         )
 
+
         self.movement_remaining = (
             value
         )
 
+
         self.status_message = (
             f"Movement set to {value}."
         )
+
 
         return value
