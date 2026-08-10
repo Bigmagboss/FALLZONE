@@ -353,5 +353,15 @@
             22,
             0
         ]
+    ],
+    "entities": [
+        {
+            "entity_id": "enemy_1",
+            "entity_type": "enemy",
+            "position": [
+                25,
+                -3
+            ]
+        }
     ]
 }

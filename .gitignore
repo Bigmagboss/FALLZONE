@@ -3,12 +3,10 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
-
 .pytest_cache/
-
 .vscode/
-
+*.code-workspace
+movement.py
 build/
 dist/
-
 saves/
