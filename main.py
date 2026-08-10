@@ -2,19 +2,30 @@ import pygame
 
 import settings as cfg
 
-from game_state import GameState
-
-from map_data import WALL_HEXES
+from game_state import (
+    GameState,
+)
 
 from hex_grid import (
     HEX_EDGE_NEIGHBORS,
     axial_to_pixel,
-    get_reachable_hex_data,
+    get_weighted_reachable_hex_data,
     hex_corners,
     is_hex_on_map,
     offset_to_axial,
     pixel_to_axial,
     reconstruct_path,
+)
+
+from map_state import (
+    BRUSH_ERASER,
+    BRUSH_MUD,
+    BRUSH_PLAYER_START,
+    BRUSH_WALL,
+    BRUSH_WATER_DEEP,
+    BRUSH_WATER_SHALLOW,
+    BRUSH_WATER_VERY_DEEP,
+    MapState,
 )
 
 
@@ -33,19 +44,7 @@ screen = pygame.display.set_mode(
 )
 
 
-pygame.display.set_caption(
-    f"FALLZONE v{cfg.VERSION}"
-)
-
-
 clock = pygame.time.Clock()
-
-
-# --------------------------------------------------
-# GAME STATE
-# --------------------------------------------------
-
-state = GameState()
 
 
 # --------------------------------------------------
@@ -57,12 +56,15 @@ font = pygame.font.Font(
     30,
 )
 
-
 small_font = pygame.font.Font(
     None,
     22,
 )
 
+tiny_font = pygame.font.Font(
+    None,
+    18,
+)
 
 path_number_font = pygame.font.Font(
     None,
@@ -71,13 +73,68 @@ path_number_font = pygame.font.Font(
 
 
 # --------------------------------------------------
-# RIGHT INFORMATION PANEL
+# PANEL POSITION
 # --------------------------------------------------
 
 panel_x = (
     cfg.SCREEN_WIDTH
     - cfg.PANEL_WIDTH
 )
+
+
+# --------------------------------------------------
+# MAP + GAME STATE
+# --------------------------------------------------
+
+map_state = MapState()
+
+state = GameState()
+
+
+state.start_new_game_session(
+    map_state.player_start
+)
+
+
+# --------------------------------------------------
+# MODE STATE
+# --------------------------------------------------
+
+editor_mode = False
+
+editor_brush = (
+    BRUSH_WALL
+)
+
+editor_status = (
+    "Session edits are temporary until SAVE AS DEFAULT."
+)
+
+
+# --------------------------------------------------
+# MOVEMENT ANIMATION STATE
+# --------------------------------------------------
+
+movement_active = False
+
+movement_path = []
+
+movement_path_index = 1
+
+movement_last_step_time = 0
+
+
+# --------------------------------------------------
+# TEXT INPUT STATE
+# --------------------------------------------------
+
+active_input = None
+
+energy_input_text = ""
+
+move_input_text = ""
+
+move_speed_input_text = ""
 
 
 # --------------------------------------------------
@@ -93,58 +150,131 @@ end_turn_rect = pygame.Rect(
 
 
 # --------------------------------------------------
-# DEVELOPER CONTROLS
+# GAME DEV CONTROLS
 # --------------------------------------------------
 
 reset_turn_rect = pygame.Rect(
     panel_x + 20,
-    535,
+    526,
     120,
-    34,
+    30,
 )
-
 
 reset_player_rect = pygame.Rect(
     panel_x + 155,
-    535,
+    526,
     120,
-    34,
+    30,
 )
 
 
 energy_input_rect = pygame.Rect(
     panel_x + 20,
-    605,
+    584,
     255,
-    34,
+    30,
 )
-
 
 move_input_rect = pygame.Rect(
     panel_x + 20,
-    675,
+    641,
     255,
-    34,
+    30,
 )
 
-
-path_numbers_rect = pygame.Rect(
+move_speed_input_rect = pygame.Rect(
     panel_x + 20,
-    718,
+    698,
     255,
     30,
 )
 
 
+path_numbers_rect = pygame.Rect(
+    panel_x + 20,
+    732,
+    120,
+    24,
+)
+
+map_editor_rect = pygame.Rect(
+    panel_x + 155,
+    732,
+    120,
+    24,
+)
+
+
 # --------------------------------------------------
-# TEXT INPUT STATE
+# MAP EDITOR CONTROLS
 # --------------------------------------------------
 
-active_input = None
+editor_wall_rect = pygame.Rect(
+    panel_x + 20,
+    120,
+    120,
+    34,
+)
 
-energy_input_text = ""
+editor_mud_rect = pygame.Rect(
+    panel_x + 155,
+    120,
+    120,
+    34,
+)
 
-move_input_text = ""
+
+editor_shallow_rect = pygame.Rect(
+    panel_x + 20,
+    164,
+    120,
+    34,
+)
+
+editor_deep_rect = pygame.Rect(
+    panel_x + 155,
+    164,
+    120,
+    34,
+)
+
+
+editor_very_deep_rect = pygame.Rect(
+    panel_x + 20,
+    208,
+    120,
+    34,
+)
+
+editor_eraser_rect = pygame.Rect(
+    panel_x + 155,
+    208,
+    120,
+    34,
+)
+
+
+editor_player_start_rect = pygame.Rect(
+    panel_x + 20,
+    252,
+    255,
+    34,
+)
+
+
+editor_save_default_rect = pygame.Rect(
+    panel_x + 20,
+    660,
+    255,
+    36,
+)
+
+editor_start_game_rect = pygame.Rect(
+    panel_x + 20,
+    706,
+    255,
+    40,
+)
 
 
 # --------------------------------------------------
@@ -157,9 +287,16 @@ def draw_button(
     label,
     font_object,
     mouse_position,
+    active=False,
 ):
 
-    if rectangle.collidepoint(
+    if active:
+
+        colour = (
+            cfg.BUTTON_HOVER_COLOR
+        )
+
+    elif rectangle.collidepoint(
         mouse_position
     ):
 
@@ -180,6 +317,17 @@ def draw_button(
         rectangle,
         border_radius=5,
     )
+
+
+    if active:
+
+        pygame.draw.rect(
+            surface,
+            cfg.EDITOR_ACCENT,
+            rectangle,
+            2,
+            border_radius=5,
+        )
 
 
     label_surface = font_object.render(
@@ -252,17 +400,21 @@ def draw_input_box(
             cfg.TEXT_COLOR
         )
 
+
+    elif active:
+
+        display_text = "|"
+
+        text_colour = (
+            cfg.SUBTEXT_COLOR
+        )
+
+
     else:
 
-        if active:
-
-            display_text = "|"
-
-        else:
-
-            display_text = (
-                "Click, type number, Enter"
-            )
+        display_text = (
+            "Click, type number, Enter"
+        )
 
         text_colour = (
             cfg.SUBTEXT_COLOR
@@ -280,8 +432,121 @@ def draw_input_box(
         text_surface,
         (
             rectangle.x + 10,
-            rectangle.y + 7,
+            rectangle.y + 6,
         ),
+    )
+
+
+# --------------------------------------------------
+# CLEAR TEXT INPUTS
+# --------------------------------------------------
+
+def clear_text_inputs():
+
+    global active_input
+
+    global energy_input_text
+
+    global move_input_text
+
+    global move_speed_input_text
+
+
+    active_input = None
+
+    energy_input_text = ""
+
+    move_input_text = ""
+
+    move_speed_input_text = ""
+
+
+# --------------------------------------------------
+# CANCEL MOVEMENT
+# --------------------------------------------------
+
+def cancel_movement():
+
+    global movement_active
+
+    global movement_path
+
+    global movement_path_index
+
+
+    movement_active = False
+
+    movement_path = []
+
+    movement_path_index = 1
+
+
+# --------------------------------------------------
+# TERRAIN DEBUG INFORMATION
+# --------------------------------------------------
+
+def terrain_name_and_cost(
+    hex_position,
+):
+
+    if (
+        hex_position
+        in map_state.wall_hexes
+    ):
+
+        return (
+            "WALL",
+            None,
+        )
+
+
+    if (
+        hex_position
+        in map_state.mud_hexes
+    ):
+
+        return (
+            "MUD",
+            cfg.MUD_MOVE_COST,
+        )
+
+
+    if (
+        hex_position
+        in map_state.water_shallow_hexes
+    ):
+
+        return (
+            "SHALLOW WATER",
+            cfg.WATER_SHALLOW_MOVE_COST,
+        )
+
+
+    if (
+        hex_position
+        in map_state.water_deep_hexes
+    ):
+
+        return (
+            "DEEP WATER",
+            cfg.WATER_DEEP_MOVE_COST,
+        )
+
+
+    if (
+        hex_position
+        in map_state.water_very_deep_hexes
+    ):
+
+        return (
+            "VERY DEEP WATER",
+            cfg.WATER_VERY_DEEP_MOVE_COST,
+        )
+
+
+    return (
+        "GROUND",
+        1,
     )
 
 
@@ -295,6 +560,40 @@ running = True
 while running:
 
     # --------------------------------------------------
+    # WINDOW TITLE SHOWS CURRENT MODE
+    # --------------------------------------------------
+
+    if editor_mode:
+
+        window_mode = (
+            "MAP EDITOR"
+        )
+
+    else:
+
+        window_mode = (
+            "GAME"
+        )
+
+
+    pygame.display.set_caption(
+        (
+            f"FALLZONE v{cfg.VERSION}"
+            f" - {window_mode}"
+        )
+    )
+
+
+    # --------------------------------------------------
+    # CURRENT MOUSE POSITION
+    # --------------------------------------------------
+
+    mouse_position = (
+        pygame.mouse.get_pos()
+    )
+
+
+    # --------------------------------------------------
     # EVENTS
     # --------------------------------------------------
 
@@ -304,14 +603,23 @@ while running:
 
             running = False
 
+            continue
+
 
         # --------------------------------------------------
-        # DEV TEXT INPUT
+        # GAME MODE TEXT INPUT
         # --------------------------------------------------
 
         if (
-            event.type == pygame.KEYDOWN
+            not editor_mode
+
             and
+
+            event.type
+            == pygame.KEYDOWN
+
+            and
+
             active_input is not None
         ):
 
@@ -355,6 +663,23 @@ while running:
                     active_input = None
 
 
+                elif (
+                    active_input == "move_speed"
+                    and
+                    move_speed_input_text
+                ):
+
+                    state.set_session_move_step_ms(
+                        int(
+                            move_speed_input_text
+                        )
+                    )
+
+                    move_speed_input_text = ""
+
+                    active_input = None
+
+
                 else:
 
                     state.status_message = (
@@ -385,6 +710,13 @@ while running:
                     )
 
 
+                elif active_input == "move_speed":
+
+                    move_speed_input_text = (
+                        move_speed_input_text[:-1]
+                    )
+
+
                 continue
 
 
@@ -394,51 +726,60 @@ while running:
 
             if event.key == pygame.K_ESCAPE:
 
-                active_input = None
+                clear_text_inputs()
 
-                energy_input_text = ""
-
-                move_input_text = ""
 
                 state.status_message = (
                     "Developer input cancelled."
                 )
 
+
                 continue
 
 
             # ------------------------------------------
-            # DIGITS ONLY
+            # NUMBERS ONLY
             # ------------------------------------------
 
             if event.unicode.isdigit():
 
-                if active_input == "energy":
+                if (
+                    active_input == "energy"
+                    and
+                    len(
+                        energy_input_text
+                    ) < 4
+                ):
 
-                    if (
-                        len(
-                            energy_input_text
-                        )
-                        < 4
-                    ):
-
-                        energy_input_text += (
-                            event.unicode
-                        )
+                    energy_input_text += (
+                        event.unicode
+                    )
 
 
-                elif active_input == "move":
+                elif (
+                    active_input == "move"
+                    and
+                    len(
+                        move_input_text
+                    ) < 3
+                ):
 
-                    if (
-                        len(
-                            move_input_text
-                        )
-                        < 3
-                    ):
+                    move_input_text += (
+                        event.unicode
+                    )
 
-                        move_input_text += (
-                            event.unicode
-                        )
+
+                elif (
+                    active_input == "move_speed"
+                    and
+                    len(
+                        move_speed_input_text
+                    ) < 4
+                ):
+
+                    move_speed_input_text += (
+                        event.unicode
+                    )
 
 
                 continue
@@ -449,8 +790,11 @@ while running:
         # --------------------------------------------------
 
         if (
-            event.type == pygame.MOUSEBUTTONDOWN
+            event.type
+            == pygame.MOUSEBUTTONDOWN
+
             and
+
             event.button == 1
         ):
 
@@ -459,19 +803,293 @@ while running:
             )
 
 
+            # ==================================================
+            # MAP EDITOR MODE
+            # ==================================================
+
+            if editor_mode:
+
+                brush_buttons = (
+                    (
+                        editor_wall_rect,
+                        BRUSH_WALL,
+                    ),
+
+                    (
+                        editor_mud_rect,
+                        BRUSH_MUD,
+                    ),
+
+                    (
+                        editor_shallow_rect,
+                        BRUSH_WATER_SHALLOW,
+                    ),
+
+                    (
+                        editor_deep_rect,
+                        BRUSH_WATER_DEEP,
+                    ),
+
+                    (
+                        editor_very_deep_rect,
+                        BRUSH_WATER_VERY_DEEP,
+                    ),
+
+                    (
+                        editor_eraser_rect,
+                        BRUSH_ERASER,
+                    ),
+
+                    (
+                        editor_player_start_rect,
+                        BRUSH_PLAYER_START,
+                    ),
+                )
+
+
+                button_used = False
+
+
+                for (
+                    rectangle,
+                    brush,
+                ) in brush_buttons:
+
+                    if rectangle.collidepoint(
+                        clicked_position
+                    ):
+
+                        editor_brush = (
+                            brush
+                        )
+
+
+                        editor_status = (
+                            "Selected: "
+                            f"{brush.replace('_', ' ')}."
+                        )
+
+
+                        button_used = True
+
+                        break
+
+
+                if button_used:
+
+                    continue
+
+
+                # ------------------------------------------
+                # SAVE MAP AS DEFAULT
+                # ------------------------------------------
+
+                if editor_save_default_rect.collidepoint(
+                    clicked_position
+                ):
+
+                    try:
+
+                        path = (
+                            map_state.save_as_default()
+                        )
+
+
+                        editor_status = (
+                            "Saved default: "
+                            f"{path.name}"
+                        )
+
+
+                    except Exception as error:
+
+                        editor_status = (
+                            "Save failed: "
+                            f"{error}"
+                        )
+
+
+                    continue
+
+
+                # ------------------------------------------
+                # START GAME FROM EDITED MAP
+                # ------------------------------------------
+
+                if editor_start_game_rect.collidepoint(
+                    clicked_position
+                ):
+
+                    editor_mode = False
+
+
+                    cancel_movement()
+
+
+                    clear_text_inputs()
+
+
+                    state.start_new_game_session(
+                        map_state.player_start
+                    )
+
+
+                    continue
+
+
+                # ------------------------------------------
+                # PAINT MAP
+                # ------------------------------------------
+
+                if (
+                    clicked_position[0]
+                    < cfg.PLAY_AREA_WIDTH
+                ):
+
+                    clicked_hex = (
+                        pixel_to_axial(
+                            clicked_position
+                        )
+                    )
+
+
+                    if is_hex_on_map(
+                        clicked_hex
+                    ):
+
+                        (
+                            changed,
+                            message,
+                        ) = map_state.paint_hex(
+                            clicked_hex,
+                            editor_brush,
+                        )
+
+
+                        editor_status = (
+                            message
+                        )
+
+
+                    continue
+
+
+            # ==================================================
+            # NORMAL GAME MODE
+            # ==================================================
+
             # ------------------------------------------
-            # END GAMEPLAY TURN
+            # RESET PLAYER
+            # ------------------------------------------
+
+            if reset_player_rect.collidepoint(
+                clicked_position
+            ):
+
+                cancel_movement()
+
+                clear_text_inputs()
+
+                state.reset_player()
+
+                continue
+
+
+            # ------------------------------------------
+            # PATH NUMBERS
+            # ------------------------------------------
+
+            if path_numbers_rect.collidepoint(
+                clicked_position
+            ):
+
+                clear_text_inputs()
+
+                state.toggle_path_numbers()
+
+                continue
+
+
+            # ------------------------------------------
+            # ENTER MAP EDITOR
+            # ------------------------------------------
+
+            if map_editor_rect.collidepoint(
+                clicked_position
+            ):
+
+                if movement_active:
+
+                    state.status_message = (
+                        "Wait for movement to finish "
+                        "before editing."
+                    )
+
+
+                else:
+
+                    clear_text_inputs()
+
+                    editor_mode = True
+
+                    editor_status = (
+                        "Session map editor opened."
+                    )
+
+
+                continue
+
+
+            # ------------------------------------------
+            # MOVE SPEED INPUT
+            # ------------------------------------------
+
+            if move_speed_input_rect.collidepoint(
+                clicked_position
+            ):
+
+                active_input = (
+                    "move_speed"
+                )
+
+                move_speed_input_text = ""
+
+                energy_input_text = ""
+
+                move_input_text = ""
+
+
+                state.status_message = (
+                    "Type movement speed in ms "
+                    "and press Enter."
+                )
+
+
+                continue
+
+
+            # ------------------------------------------
+            # BLOCK OTHER INPUT DURING MOVEMENT
+            # ------------------------------------------
+
+            if movement_active:
+
+                state.status_message = (
+                    "Wait for movement to finish."
+                )
+
+                continue
+
+
+            # ------------------------------------------
+            # END TURN
             # ------------------------------------------
 
             if end_turn_rect.collidepoint(
                 clicked_position
             ):
 
-                active_input = None
-
-                energy_input_text = ""
-
-                move_input_text = ""
+                clear_text_inputs()
 
                 state.end_turn()
 
@@ -486,24 +1104,9 @@ while running:
                 clicked_position
             ):
 
-                active_input = None
+                clear_text_inputs()
 
                 state.reset_turn()
-
-                continue
-
-
-            # ------------------------------------------
-            # RESET PLAYER
-            # ------------------------------------------
-
-            if reset_player_rect.collidepoint(
-                clicked_position
-            ):
-
-                active_input = None
-
-                state.reset_player()
 
                 continue
 
@@ -524,9 +1127,13 @@ while running:
 
                 move_input_text = ""
 
+                move_speed_input_text = ""
+
+
                 state.status_message = (
                     "Type energy and press Enter."
                 )
+
 
                 continue
 
@@ -547,41 +1154,28 @@ while running:
 
                 energy_input_text = ""
 
+                move_speed_input_text = ""
+
+
                 state.status_message = (
                     "Type movement and press Enter."
                 )
 
-                continue
-
-
-            # ------------------------------------------
-            # PATH NUMBER TOGGLE
-            # ------------------------------------------
-
-            if path_numbers_rect.collidepoint(
-                clicked_position
-            ):
-
-                active_input = None
-
-                energy_input_text = ""
-
-                move_input_text = ""
-
-                state.toggle_path_numbers()
 
                 continue
 
 
-            active_input = None
+            clear_text_inputs()
 
 
             # ------------------------------------------
-            # MAP MOVEMENT
+            # CLICK MAP DESTINATION
             # ------------------------------------------
 
-            clicked_hex = pixel_to_axial(
-                clicked_position
+            clicked_hex = (
+                pixel_to_axial(
+                    clicked_position
+                )
             )
 
 
@@ -600,10 +1194,13 @@ while running:
             ):
 
                 # --------------------------------------
-                # WALL CLICK
+                # WALL
                 # --------------------------------------
 
-                if clicked_hex in WALL_HEXES:
+                if (
+                    clicked_hex
+                    in map_state.wall_hexes
+                ):
 
                     state.status_message = (
                         "Movement blocked by wall."
@@ -613,58 +1210,85 @@ while running:
 
 
                 # --------------------------------------
-                # CURRENT RESOURCE LIMIT
+                # CURRENT TERRAIN COSTS
                 # --------------------------------------
 
-                click_energy_limit = (
+                terrain_move_costs = (
+                    map_state.get_terrain_move_costs()
+                )
+
+
+                energy_limit = (
                     state.player_energy
                     // cfg.MOVE_ENERGY_COST_PER_HEX
                 )
 
 
-                click_move_range = min(
+                move_budget = min(
                     state.movement_remaining,
-                    click_energy_limit,
+                    energy_limit,
                 )
 
 
                 # --------------------------------------
-                # BFS REACHABILITY
+                # DIJKSTRA
                 # --------------------------------------
 
                 (
-                    click_reachable_distances,
-                    click_came_from,
-                ) = get_reachable_hex_data(
+                    reachable_costs,
+                    came_from,
+                ) = get_weighted_reachable_hex_data(
                     state.player_position,
-                    click_move_range,
-                    WALL_HEXES,
+                    move_budget,
+                    map_state.wall_hexes,
+                    terrain_move_costs,
                 )
 
 
                 # --------------------------------------
-                # MOVE
+                # BEGIN ANIMATED MOVEMENT
                 # --------------------------------------
 
                 if (
                     clicked_hex
-                    in click_reachable_distances
+                    in reachable_costs
+
                     and
+
                     clicked_hex
                     != state.player_position
                 ):
 
-                    movement_cost = (
-                        click_reachable_distances[
-                            clicked_hex
-                        ]
+                    click_path = (
+                        reconstruct_path(
+                            came_from,
+                            state.player_position,
+                            clicked_hex,
+                        )
                     )
 
 
-                    state.move_player_to(
-                        clicked_hex,
-                        movement_cost,
-                    )
+                    if len(
+                        click_path
+                    ) > 1:
+
+                        movement_active = True
+
+                        movement_path = (
+                            click_path
+                        )
+
+                        movement_path_index = 1
+
+                        movement_last_step_time = (
+                            pygame.time.get_ticks()
+                        )
+
+
+                        state.status_message = (
+                            "Moving. Total path cost: "
+                            f"{reachable_costs[clicked_hex]}."
+                        )
 
 
                 elif (
@@ -673,179 +1297,309 @@ while running:
                 ):
 
                     state.status_message = (
-                        "No reachable path "
+                        "No affordable path "
                         "within current movement."
                     )
 
 
     # --------------------------------------------------
-    # MOUSE POSITION
+    # EDITOR CLICK-DRAG PAINTING
     # --------------------------------------------------
 
-    mouse_position = (
-        pygame.mouse.get_pos()
+    if (
+        editor_mode
+
+        and
+
+        pygame.mouse.get_pressed()[0]
+    ):
+
+        if (
+            mouse_position[0]
+            < cfg.PLAY_AREA_WIDTH
+
+            and
+
+            editor_brush
+            != BRUSH_PLAYER_START
+        ):
+
+            drag_hex = (
+                pixel_to_axial(
+                    mouse_position
+                )
+            )
+
+
+            if is_hex_on_map(
+                drag_hex
+            ):
+
+                map_state.paint_hex(
+                    drag_hex,
+                    editor_brush,
+                )
+
+
+    # --------------------------------------------------
+    # MOVEMENT ANIMATION UPDATE
+    # --------------------------------------------------
+
+    if (
+        not editor_mode
+        and
+        movement_active
+    ):
+
+        current_time = (
+            pygame.time.get_ticks()
+        )
+
+
+        if (
+            current_time
+            - movement_last_step_time
+
+            >=
+
+            state.session_move_step_ms
+        ):
+
+            next_hex = (
+                movement_path[
+                    movement_path_index
+                ]
+            )
+
+
+            terrain_move_costs = (
+                map_state.get_terrain_move_costs()
+            )
+
+
+            step_cost = (
+                terrain_move_costs.get(
+                    next_hex,
+                    1,
+                )
+            )
+
+
+            if state.move_player_to(
+                next_hex,
+                step_cost,
+            ):
+
+                movement_path_index += 1
+
+
+                movement_last_step_time = (
+                    current_time
+                )
+
+
+                if (
+                    movement_path_index
+                    >= len(
+                        movement_path
+                    )
+                ):
+
+                    cancel_movement()
+
+
+                    state.status_message = (
+                        "Movement complete."
+                    )
+
+
+            else:
+
+                cancel_movement()
+
+
+                state.status_message = (
+                    "Movement stopped: "
+                    "insufficient resources."
+                )
+
+
+    # --------------------------------------------------
+    # CURRENT MAP / MOUSE DATA
+    # --------------------------------------------------
+
+    terrain_move_costs = (
+        map_state.get_terrain_move_costs()
     )
 
 
-    # --------------------------------------------------
-    # PLAYER PIXEL POSITION
-    # --------------------------------------------------
-
-    player_center = axial_to_pixel(
-        state.player_position
-    )
-
-
-    # --------------------------------------------------
-    # PLAYER HOVER
-    # --------------------------------------------------
-
-    mouse_dx = (
-        mouse_position[0]
-        - player_center[0]
-    )
-
-
-    mouse_dy = (
-        mouse_position[1]
-        - player_center[1]
-    )
-
-
-    mouse_distance_from_player = (
-        mouse_dx * mouse_dx
-        + mouse_dy * mouse_dy
-    ) ** 0.5
-
-
-    player_is_hovered = (
-        mouse_distance_from_player
-        <= cfg.HEX_SIZE * 0.55
-    )
-
-
-    # --------------------------------------------------
-    # CURRENT MOVEMENT RANGE
-    # --------------------------------------------------
-
-    energy_move_limit = (
-        state.player_energy
-        // cfg.MOVE_ENERGY_COST_PER_HEX
-    )
-
-
-    current_move_range = min(
-        state.movement_remaining,
-        energy_move_limit,
-    )
-
-
-    # --------------------------------------------------
-    # BFS REACHABLE AREA
-    # --------------------------------------------------
-
-    (
-        reachable_distances,
-        came_from,
-    ) = get_reachable_hex_data(
-        state.player_position,
-        current_move_range,
-        WALL_HEXES,
-    )
-
-
-    reachable_hexes = set(
-        reachable_distances.keys()
-    )
-
-
-    # --------------------------------------------------
-    # HEX UNDER MOUSE
-    # --------------------------------------------------
-
-    mouse_hex = pixel_to_axial(
-        mouse_position
+    mouse_hex = (
+        pixel_to_axial(
+            mouse_position
+        )
     )
 
 
     mouse_hex_on_map = (
         mouse_position[0]
         < cfg.PLAY_AREA_WIDTH
+
         and
+
         is_hex_on_map(
             mouse_hex
         )
     )
 
 
-    mouse_hex_blocked = (
-        mouse_hex_on_map
-        and
-        mouse_hex in WALL_HEXES
+    player_center = (
+        axial_to_pixel(
+            state.player_position
+        )
     )
 
 
     # --------------------------------------------------
-    # MOUSE DESTINATION DATA
+    # DEFAULT GAMEPLAY VISUAL DATA
     # --------------------------------------------------
 
-    if mouse_hex_on_map:
+    preview_path = []
 
-        mouse_hex_distance = (
-            reachable_distances.get(
+    reachable_hexes = set()
+
+    reachable_costs = {}
+
+    mouse_path_cost = None
+
+    mouse_hex_in_range = False
+
+    player_is_hovered = False
+
+    show_movement_perimeter = False
+
+    current_move_budget = 0
+
+
+    # --------------------------------------------------
+    # GAMEPLAY PATHFINDING / HOVER
+    # --------------------------------------------------
+
+    if not editor_mode:
+
+        mouse_dx = (
+            mouse_position[0]
+            - player_center[0]
+        )
+
+        mouse_dy = (
+            mouse_position[1]
+            - player_center[1]
+        )
+
+
+        player_is_hovered = (
+            (
+                mouse_dx * mouse_dx
+                +
+                mouse_dy * mouse_dy
+            ) ** 0.5
+
+            <=
+
+            cfg.HEX_SIZE * 0.55
+        )
+
+
+        energy_limit = (
+            state.player_energy
+            // cfg.MOVE_ENERGY_COST_PER_HEX
+        )
+
+
+        current_move_budget = min(
+            state.movement_remaining,
+            energy_limit,
+        )
+
+
+        (
+            reachable_costs,
+            came_from,
+        ) = get_weighted_reachable_hex_data(
+            state.player_position,
+            current_move_budget,
+            map_state.wall_hexes,
+            terrain_move_costs,
+        )
+
+
+        reachable_hexes = set(
+            reachable_costs.keys()
+        )
+
+
+        mouse_blocked = (
+            mouse_hex_on_map
+            and
+            mouse_hex
+            in map_state.wall_hexes
+        )
+
+
+        if mouse_hex_on_map:
+
+            mouse_path_cost = (
+                reachable_costs.get(
+                    mouse_hex
+                )
+            )
+
+
+            mouse_hex_in_range = (
+                not mouse_blocked
+
+                and
+
                 mouse_hex
+                != state.player_position
+
+                and
+
+                mouse_hex
+                in reachable_costs
+            )
+
+
+        if (
+            mouse_hex_in_range
+            and
+            not movement_active
+        ):
+
+            preview_path = (
+                reconstruct_path(
+                    came_from,
+                    state.player_position,
+                    mouse_hex,
+                )
+            )
+
+
+        show_movement_perimeter = (
+            not movement_active
+
+            and
+
+            current_move_budget > 0
+
+            and
+
+            (
+                player_is_hovered
+                or
+                mouse_hex_in_range
             )
         )
-
-
-        mouse_hex_in_range = (
-            not mouse_hex_blocked
-            and
-            mouse_hex
-            != state.player_position
-            and
-            mouse_hex
-            in reachable_distances
-        )
-
-
-    else:
-
-        mouse_hex_distance = None
-
-        mouse_hex_in_range = False
-
-
-    # --------------------------------------------------
-    # MOVEMENT PATH PREVIEW
-    # --------------------------------------------------
-
-    if mouse_hex_in_range:
-
-        preview_path = reconstruct_path(
-            came_from,
-            state.player_position,
-            mouse_hex,
-        )
-
-    else:
-
-        preview_path = []
-
-
-    # --------------------------------------------------
-    # BLUE RANGE VISIBILITY
-    # --------------------------------------------------
-
-    show_movement_perimeter = (
-        current_move_range > 0
-        and
-        (
-            player_is_hovered
-            or
-            mouse_hex_in_range
-        )
-    )
 
 
     # --------------------------------------------------
@@ -858,7 +1612,7 @@ while running:
 
 
     # --------------------------------------------------
-    # DRAW MAP
+    # DRAW MAP TERRAIN
     # --------------------------------------------------
 
     for column in range(
@@ -869,27 +1623,36 @@ while running:
             cfg.GRID_ROWS
         ):
 
-            hex_position = offset_to_axial(
-                column,
-                row,
+            hex_position = (
+                offset_to_axial(
+                    column,
+                    row,
+                )
             )
 
 
-            center = axial_to_pixel(
+            center = (
+                axial_to_pixel(
+                    hex_position
+                )
+            )
+
+
+            points = (
+                hex_corners(
+                    center
+                )
+            )
+
+
+            # ------------------------------------------
+            # WALL
+            # ------------------------------------------
+
+            if (
                 hex_position
-            )
-
-
-            points = hex_corners(
-                center
-            )
-
-
-            # ------------------------------------------
-            # WALL TILE
-            # ------------------------------------------
-
-            if hex_position in WALL_HEXES:
+                in map_state.wall_hexes
+            ):
 
                 tile_fill = (
                     cfg.WALL_FILL
@@ -905,7 +1668,95 @@ while running:
 
 
             # ------------------------------------------
-            # NORMAL TILE
+            # MUD
+            # ------------------------------------------
+
+            elif (
+                hex_position
+                in map_state.mud_hexes
+            ):
+
+                tile_fill = (
+                    cfg.MUD_FILL
+                )
+
+                tile_outline = (
+                    cfg.MUD_OUTLINE
+                )
+
+                tile_outline_width = (
+                    cfg.MUD_OUTLINE_WIDTH
+                )
+
+
+            # ------------------------------------------
+            # VERY DEEP WATER
+            # ------------------------------------------
+
+            elif (
+                hex_position
+                in map_state.water_very_deep_hexes
+            ):
+
+                tile_fill = (
+                    cfg.WATER_VERY_DEEP_FILL
+                )
+
+                tile_outline = (
+                    cfg.WATER_VERY_DEEP_OUTLINE
+                )
+
+                tile_outline_width = (
+                    cfg.WATER_OUTLINE_WIDTH
+                )
+
+
+            # ------------------------------------------
+            # DEEP WATER
+            # ------------------------------------------
+
+            elif (
+                hex_position
+                in map_state.water_deep_hexes
+            ):
+
+                tile_fill = (
+                    cfg.WATER_DEEP_FILL
+                )
+
+                tile_outline = (
+                    cfg.WATER_DEEP_OUTLINE
+                )
+
+                tile_outline_width = (
+                    cfg.WATER_OUTLINE_WIDTH
+                )
+
+
+            # ------------------------------------------
+            # SHALLOW WATER
+            # ------------------------------------------
+
+            elif (
+                hex_position
+                in map_state.water_shallow_hexes
+            ):
+
+                tile_fill = (
+                    cfg.WATER_SHALLOW_FILL
+                )
+
+                tile_outline = (
+                    cfg.WATER_SHALLOW_OUTLINE
+                )
+
+                tile_outline_width = (
+                    cfg.WATER_OUTLINE_WIDTH
+                )
+
+
+            # ------------------------------------------
+            # NORMAL GROUND
             # ------------------------------------------
 
             else:
@@ -936,761 +1787,1108 @@ while running:
             )
 
 
-    # --------------------------------------------------
-    # BLUE REACHABLE OUTER PERIMETER
-    # --------------------------------------------------
+    # ==================================================
+    # NORMAL GAME VISUALS
+    # ==================================================
 
-    if show_movement_perimeter:
+    if not editor_mode:
 
-        for hex_position in reachable_hexes:
+        # --------------------------------------------------
+        # BLUE REACHABLE OUTER PERIMETER
+        # --------------------------------------------------
 
-            q, r = hex_position
+        if show_movement_perimeter:
 
+            for hex_position in reachable_hexes:
 
-            center = axial_to_pixel(
-                hex_position
-            )
-
-
-            points = hex_corners(
-                center
-            )
-
-
-            for edge_index, (
-                dq,
-                dr,
-            ) in enumerate(
-                HEX_EDGE_NEIGHBORS
-            ):
-
-                neighbor = (
-                    q + dq,
-                    r + dr,
+                q, r = (
+                    hex_position
                 )
 
 
-                if neighbor in reachable_hexes:
+                points = (
+                    hex_corners(
+                        axial_to_pixel(
+                            hex_position
+                        )
+                    )
+                )
 
-                    continue
 
-
-                point_a = points[
-                    edge_index
-                ]
-
-
-                point_b = points[
+                for (
+                    edge_index,
                     (
-                        edge_index + 1
-                    ) % 6
-                ]
+                        dq,
+                        dr,
+                    ),
+                ) in enumerate(
+                    HEX_EDGE_NEIGHBORS
+                ):
+
+                    neighbor = (
+                        q + dq,
+                        r + dr,
+                    )
+
+
+                    if (
+                        neighbor
+                        in reachable_hexes
+                    ):
+
+                        continue
+
+
+                    point_a = (
+                        points[
+                            edge_index
+                        ]
+                    )
+
+
+                    point_b = (
+                        points[
+                            (
+                                edge_index + 1
+                            ) % 6
+                        ]
+                    )
+
+
+                    pygame.draw.line(
+                        screen,
+                        cfg.RANGE_GLOW_SOFT,
+                        point_a,
+                        point_b,
+                        7,
+                    )
+
+
+                    pygame.draw.line(
+                        screen,
+                        cfg.RANGE_GLOW,
+                        point_a,
+                        point_b,
+                        2,
+                    )
+
+
+        # --------------------------------------------------
+        # PATH PREVIEW
+        # --------------------------------------------------
+
+        if len(
+            preview_path
+        ) > 1:
+
+            for path_index in range(
+                1,
+                len(
+                    preview_path
+                ),
+            ):
+
+                previous_center = (
+                    axial_to_pixel(
+                        preview_path[
+                            path_index - 1
+                        ]
+                    )
+                )
+
+
+                current_center = (
+                    axial_to_pixel(
+                        preview_path[
+                            path_index
+                        ]
+                    )
+                )
 
 
                 pygame.draw.line(
                     screen,
-                    cfg.RANGE_GLOW_SOFT,
-                    point_a,
-                    point_b,
+                    cfg.PATH_PREVIEW_GLOW,
+                    previous_center,
+                    current_center,
                     7,
                 )
 
 
                 pygame.draw.line(
                     screen,
-                    cfg.RANGE_GLOW,
-                    point_a,
-                    point_b,
-                    2,
+                    cfg.PATH_PREVIEW,
+                    previous_center,
+                    current_center,
+                    3,
                 )
 
 
-    # --------------------------------------------------
-    # DRAW MOVEMENT PATH PREVIEW
-    # --------------------------------------------------
+            # ------------------------------------------
+            # PATH STEP MARKERS
+            # ------------------------------------------
 
-    if (
-        len(
-            preview_path
-        )
-        > 1
-    ):
+            for (
+                step_number,
+                path_hex,
+            ) in enumerate(
+                preview_path[1:],
+                start=1,
+            ):
 
-        # ----------------------------------------------
-        # CONNECT PATH HEX CENTRES
-        # ----------------------------------------------
+                path_center = (
+                    axial_to_pixel(
+                        path_hex
+                    )
+                )
 
-        for path_index in range(
-            1,
-            len(
-                preview_path
-            ),
+
+                marker_points = (
+                    hex_corners(
+                        path_center,
+                        cfg.HEX_SIZE * 0.30,
+                    )
+                )
+
+
+                pygame.draw.polygon(
+                    screen,
+                    cfg.PATH_PREVIEW,
+                    marker_points,
+                )
+
+
+                if (
+                    state.dev_show_path_numbers
+                ):
+
+                    number_surface = (
+                        path_number_font.render(
+                            str(
+                                step_number
+                            ),
+                            True,
+                            cfg.PATH_NUMBER_COLOR,
+                        )
+                    )
+
+
+                    number_rect = (
+                        number_surface.get_rect(
+                            center=(
+                                int(
+                                    path_center[0]
+                                ),
+                                int(
+                                    path_center[1]
+                                ),
+                            )
+                        )
+                    )
+
+
+                    screen.blit(
+                        number_surface,
+                        number_rect,
+                    )
+
+
+        # --------------------------------------------------
+        # DESTINATION HOVER
+        # --------------------------------------------------
+
+        if (
+            mouse_hex_on_map
+
+            and
+
+            mouse_hex
+            != state.player_position
+
+            and
+
+            not movement_active
         ):
 
-            previous_hex = (
-                preview_path[
-                    path_index - 1
-                ]
+            hover_points = (
+                hex_corners(
+                    axial_to_pixel(
+                        mouse_hex
+                    )
+                )
             )
 
 
-            current_hex = (
-                preview_path[
-                    path_index
-                ]
-            )
+            if mouse_hex_in_range:
+
+                soft_colour = (
+                    cfg.HOVER_VALID_GLOW_SOFT
+                )
+
+                bright_colour = (
+                    cfg.HOVER_VALID_OUTLINE
+                )
 
 
-            previous_center = axial_to_pixel(
-                previous_hex
-            )
+            else:
+
+                soft_colour = (
+                    cfg.HOVER_INVALID_GLOW_SOFT
+                )
+
+                bright_colour = (
+                    cfg.HOVER_INVALID_OUTLINE
+                )
 
 
-            current_center = axial_to_pixel(
-                current_hex
-            )
-
-
-            pygame.draw.line(
+            pygame.draw.polygon(
                 screen,
-                cfg.PATH_PREVIEW_GLOW,
-                previous_center,
-                current_center,
+                soft_colour,
+                hover_points,
                 7,
-            )
-
-
-            pygame.draw.line(
-                screen,
-                cfg.PATH_PREVIEW,
-                previous_center,
-                current_center,
-                3,
-            )
-
-
-        # ----------------------------------------------
-        # DRAW STEP MARKERS
-        # ----------------------------------------------
-
-        for step_number, path_hex in enumerate(
-            preview_path[1:],
-            start=1,
-        ):
-
-            path_center = axial_to_pixel(
-                path_hex
-            )
-
-
-            marker_points = hex_corners(
-                path_center,
-                cfg.HEX_SIZE * 0.30,
             )
 
 
             pygame.draw.polygon(
                 screen,
-                cfg.PATH_PREVIEW,
-                marker_points,
+                bright_colour,
+                hover_points,
+                2,
             )
 
 
-            # ------------------------------------------
-            # OPTIONAL DEV STEP NUMBERS
-            # ------------------------------------------
+        # --------------------------------------------------
+        # PLAYER
+        # --------------------------------------------------
 
-            if state.dev_show_path_numbers:
-
-                number_surface = (
-                    path_number_font.render(
-                        str(
-                            step_number
-                        ),
-                        True,
-                        cfg.PATH_NUMBER_COLOR,
-                    )
-                )
-
-
-                number_rect = (
-                    number_surface.get_rect(
-                        center=(
-                            int(
-                                path_center[0]
-                            ),
-                            int(
-                                path_center[1]
-                            ),
-                        )
-                    )
-                )
-
-
-                screen.blit(
-                    number_surface,
-                    number_rect,
-                )
-
-
-    # --------------------------------------------------
-    # HOVERED DESTINATION
-    # --------------------------------------------------
-
-    if (
-        mouse_hex_on_map
-        and
-        mouse_hex
-        != state.player_position
-    ):
-
-        hover_center = axial_to_pixel(
-            mouse_hex
-        )
-
-
-        hover_points = hex_corners(
-            hover_center
-        )
-
-
-        if mouse_hex_in_range:
-
-            hover_soft_colour = (
-                cfg.HOVER_VALID_GLOW_SOFT
+        player_points = (
+            hex_corners(
+                player_center,
+                cfg.HEX_SIZE * 0.55,
             )
-
-            hover_bright_colour = (
-                cfg.HOVER_VALID_OUTLINE
-            )
-
-
-        else:
-
-            hover_soft_colour = (
-                cfg.HOVER_INVALID_GLOW_SOFT
-            )
-
-            hover_bright_colour = (
-                cfg.HOVER_INVALID_OUTLINE
-            )
-
-
-        pygame.draw.polygon(
-            screen,
-            hover_soft_colour,
-            hover_points,
-            7,
         )
 
 
         pygame.draw.polygon(
             screen,
-            hover_bright_colour,
-            hover_points,
+            cfg.PLAYER_FILL,
+            player_points,
+        )
+
+
+        pygame.draw.polygon(
+            screen,
+            cfg.PLAYER_OUTLINE,
+            player_points,
             2,
         )
 
 
+    # ==================================================
+    # MAP EDITOR VISUALS
+    # ==================================================
+
+    else:
+
+        # --------------------------------------------------
+        # EDITOR BORDER
+        # --------------------------------------------------
+
+        pygame.draw.rect(
+            screen,
+            cfg.EDITOR_ACCENT,
+            pygame.Rect(
+                1,
+                1,
+                cfg.PLAY_AREA_WIDTH - 2,
+                cfg.SCREEN_HEIGHT - 2,
+            ),
+            4,
+        )
+
+
+        # --------------------------------------------------
+        # EDITOR HEX HOVER
+        # --------------------------------------------------
+
+        if mouse_hex_on_map:
+
+            hover_points = (
+                hex_corners(
+                    axial_to_pixel(
+                        mouse_hex
+                    )
+                )
+            )
+
+
+            pygame.draw.polygon(
+                screen,
+                cfg.EDITOR_ACCENT,
+                hover_points,
+                3,
+            )
+
+
+        # --------------------------------------------------
+        # EDITOR PLAYER START MARKER
+        # --------------------------------------------------
+
+        start_center = (
+            axial_to_pixel(
+                map_state.player_start
+            )
+        )
+
+
+        start_points = (
+            hex_corners(
+                start_center,
+                cfg.HEX_SIZE * 0.55,
+            )
+        )
+
+
+        pygame.draw.polygon(
+            screen,
+            cfg.EDITOR_PLAYER_START,
+            start_points,
+        )
+
+
+        pygame.draw.polygon(
+            screen,
+            cfg.PLAYER_OUTLINE,
+            start_points,
+            2,
+        )
+
+
+        start_label = (
+            tiny_font.render(
+                "P",
+                True,
+                cfg.BACKGROUND,
+            )
+        )
+
+
+        start_label_rect = (
+            start_label.get_rect(
+                center=start_center
+            )
+        )
+
+
+        screen.blit(
+            start_label,
+            start_label_rect,
+        )
+
+
     # --------------------------------------------------
-    # PLAYER
+    # RIGHT PANEL BACKGROUND
     # --------------------------------------------------
-
-    player_points = hex_corners(
-        player_center,
-        cfg.HEX_SIZE * 0.55,
-    )
-
-
-    pygame.draw.polygon(
-        screen,
-        cfg.PLAYER_FILL,
-        player_points,
-    )
-
-
-    pygame.draw.polygon(
-        screen,
-        cfg.PLAYER_OUTLINE,
-        player_points,
-        2,
-    )
-
-
-    # --------------------------------------------------
-    # INFORMATION PANEL
-    # --------------------------------------------------
-
-    panel_rect = pygame.Rect(
-        panel_x,
-        0,
-        cfg.PANEL_WIDTH,
-        cfg.SCREEN_HEIGHT,
-    )
-
 
     pygame.draw.rect(
         screen,
         cfg.PANEL_COLOR,
-        panel_rect,
-    )
-
-
-    # --------------------------------------------------
-    # MAIN HUD TEXT
-    # --------------------------------------------------
-
-    title_text = font.render(
-        f"FALLZONE v{cfg.VERSION}",
-        True,
-        cfg.TEXT_COLOR,
-    )
-
-
-    hp_text = font.render(
-        (
-            f"HP: "
-            f"{state.player_hp} "
-            f"/ {cfg.MAX_HP}"
+        pygame.Rect(
+            panel_x,
+            0,
+            cfg.PANEL_WIDTH,
+            cfg.SCREEN_HEIGHT,
         ),
-        True,
-        cfg.TEXT_COLOR,
     )
 
 
-    energy_text = font.render(
-        (
-            f"ENERGY: "
-            f"{state.player_energy} "
-            f"/ {state.session_max_energy}"
-        ),
-        True,
-        cfg.TEXT_COLOR,
-    )
+    # ==================================================
+    # MAP EDITOR PANEL
+    # ==================================================
 
+    if editor_mode:
 
-    position_text = font.render(
-        (
-            f"HEX: "
-            f"{state.player_position}"
-        ),
-        True,
-        cfg.TEXT_COLOR,
-    )
-
-
-    turn_text = small_font.render(
-        (
-            "TURN: "
-            f"{state.turn_number}"
-        ),
-        True,
-        cfg.TEXT_COLOR,
-    )
-
-
-    # --------------------------------------------------
-    # DEBUG TEXT
-    # --------------------------------------------------
-
-    debug_title = small_font.render(
-        "DEVELOPMENT BUILD",
-        True,
-        cfg.SUBTEXT_COLOR,
-    )
-
-
-    hover_text = small_font.render(
-        (
-            "PLAYER HOVER: "
-            f"{player_is_hovered}"
-        ),
-        True,
-        cfg.SUBTEXT_COLOR,
-    )
-
-
-    range_text = small_font.render(
-        (
-            "SESSION MAX MOVE: "
-            f"{state.session_max_move_range}"
-        ),
-        True,
-        cfg.SUBTEXT_COLOR,
-    )
-
-
-    movement_left_text = small_font.render(
-        (
-            "MOVE LEFT: "
-            f"{state.movement_remaining} "
-            f"/ "
-            f"{state.session_max_move_range}"
-        ),
-        True,
-        cfg.SUBTEXT_COLOR,
-    )
-
-
-    current_range_text = small_font.render(
-        (
-            "CURRENT RANGE: "
-            f"{current_move_range}"
-        ),
-        True,
-        cfg.SUBTEXT_COLOR,
-    )
-
-
-    # --------------------------------------------------
-    # MOUSE DEBUG TEXT
-    # --------------------------------------------------
-
-    if mouse_hex_on_map:
-
-        mouse_hex_text = small_font.render(
-            (
-                "MOUSE HEX: "
-                f"{mouse_hex}"
-            ),
-            True,
-            cfg.SUBTEXT_COLOR,
+        editor_title = (
+            font.render(
+                "MAP EDITOR MODE",
+                True,
+                cfg.EDITOR_ACCENT,
+            )
         )
 
 
-        if mouse_hex_blocked:
+        screen.blit(
+            editor_title,
+            (
+                panel_x + 20,
+                28,
+            ),
+        )
 
-            distance_text = small_font.render(
-                "PATH COST: BLOCKED",
+
+        selected_text = (
+            small_font.render(
+                (
+                    "BRUSH: "
+                    f"{editor_brush.replace('_', ' ').upper()}"
+                ),
                 True,
-                cfg.HOVER_INVALID_OUTLINE,
+                cfg.TEXT_COLOR,
+            )
+        )
+
+
+        screen.blit(
+            selected_text,
+            (
+                panel_x + 20,
+                70,
+            ),
+        )
+
+
+        # --------------------------------------------------
+        # MATERIAL BUTTONS
+        # --------------------------------------------------
+
+        draw_button(
+            screen,
+            editor_wall_rect,
+            "WALL",
+            small_font,
+            mouse_position,
+            editor_brush
+            == BRUSH_WALL,
+        )
+
+
+        draw_button(
+            screen,
+            editor_mud_rect,
+            "MUD (2)",
+            small_font,
+            mouse_position,
+            editor_brush
+            == BRUSH_MUD,
+        )
+
+
+        draw_button(
+            screen,
+            editor_shallow_rect,
+            "SHALLOW (2)",
+            tiny_font,
+            mouse_position,
+            editor_brush
+            == BRUSH_WATER_SHALLOW,
+        )
+
+
+        draw_button(
+            screen,
+            editor_deep_rect,
+            "DEEP (3)",
+            tiny_font,
+            mouse_position,
+            editor_brush
+            == BRUSH_WATER_DEEP,
+        )
+
+
+        draw_button(
+            screen,
+            editor_very_deep_rect,
+            "V.DEEP (4)",
+            tiny_font,
+            mouse_position,
+            editor_brush
+            == BRUSH_WATER_VERY_DEEP,
+        )
+
+
+        draw_button(
+            screen,
+            editor_eraser_rect,
+            "ERASER",
+            small_font,
+            mouse_position,
+            editor_brush
+            == BRUSH_ERASER,
+        )
+
+
+        draw_button(
+            screen,
+            editor_player_start_rect,
+            "PLAYER START",
+            small_font,
+            mouse_position,
+            editor_brush
+            == BRUSH_PLAYER_START,
+        )
+
+
+        # --------------------------------------------------
+        # EDITOR HELP
+        # --------------------------------------------------
+
+        help_lines = (
+            "Left click / drag: paint terrain",
+            "PLAYER START: click one hex",
+            "",
+            "Wall = blocked",
+            "Mud = cost 2",
+            "Shallow water = cost 2",
+            "Deep water = cost 3",
+            "Very deep water = cost 4",
+            "",
+            "START GAME keeps session edits.",
+            "SAVE AS DEFAULT persists them.",
+        )
+
+
+        help_y = 320
+
+
+        for line in help_lines:
+
+            line_surface = (
+                tiny_font.render(
+                    line,
+                    True,
+                    cfg.SUBTEXT_COLOR,
+                )
             )
 
 
-        elif mouse_hex_distance is None:
+            screen.blit(
+                line_surface,
+                (
+                    panel_x + 20,
+                    help_y,
+                ),
+            )
 
-            distance_text = small_font.render(
-                "PATH COST: UNREACHABLE",
+
+            help_y += 24
+
+
+        # --------------------------------------------------
+        # EDITOR STATUS
+        # --------------------------------------------------
+
+        status_surface = (
+            tiny_font.render(
+                editor_status[:38],
                 True,
-                cfg.SUBTEXT_COLOR,
+                cfg.TEXT_COLOR,
+            )
+        )
+
+
+        screen.blit(
+            status_surface,
+            (
+                panel_x + 20,
+                610,
+            ),
+        )
+
+
+        # --------------------------------------------------
+        # SAVE / START BUTTONS
+        # --------------------------------------------------
+
+        draw_button(
+            screen,
+            editor_save_default_rect,
+            "SAVE AS DEFAULT",
+            small_font,
+            mouse_position,
+        )
+
+
+        draw_button(
+            screen,
+            editor_start_game_rect,
+            "START GAME SESSION",
+            small_font,
+            mouse_position,
+        )
+
+
+    # ==================================================
+    # NORMAL GAME PANEL
+    # ==================================================
+
+    else:
+
+        # --------------------------------------------------
+        # MAIN HUD
+        # --------------------------------------------------
+
+        title_text = (
+            font.render(
+                f"FALLZONE v{cfg.VERSION}",
+                True,
+                cfg.TEXT_COLOR,
+            )
+        )
+
+
+        hp_text = (
+            font.render(
+                (
+                    f"HP: "
+                    f"{state.player_hp} "
+                    f"/ {cfg.MAX_HP}"
+                ),
+                True,
+                cfg.TEXT_COLOR,
+            )
+        )
+
+
+        energy_text = (
+            font.render(
+                (
+                    f"ENERGY: "
+                    f"{state.player_energy} "
+                    f"/ {state.session_max_energy}"
+                ),
+                True,
+                cfg.TEXT_COLOR,
+            )
+        )
+
+
+        position_text = (
+            font.render(
+                (
+                    "HEX: "
+                    f"{state.player_position}"
+                ),
+                True,
+                cfg.TEXT_COLOR,
+            )
+        )
+
+
+        turn_text = (
+            small_font.render(
+                (
+                    "TURN: "
+                    f"{state.turn_number}"
+                ),
+                True,
+                cfg.TEXT_COLOR,
+            )
+        )
+
+
+        screen.blit(
+            title_text,
+            (
+                panel_x + 24,
+                32,
+            ),
+        )
+
+
+        screen.blit(
+            hp_text,
+            (
+                panel_x + 24,
+                80,
+            ),
+        )
+
+
+        screen.blit(
+            energy_text,
+            (
+                panel_x + 24,
+                115,
+            ),
+        )
+
+
+        screen.blit(
+            position_text,
+            (
+                panel_x + 24,
+                150,
+            ),
+        )
+
+
+        screen.blit(
+            turn_text,
+            (
+                panel_x + 24,
+                185,
+            ),
+        )
+
+
+        draw_button(
+            screen,
+            end_turn_rect,
+            "END TURN",
+            small_font,
+            mouse_position,
+        )
+
+
+        # --------------------------------------------------
+        # DEBUG TERRAIN DATA
+        # --------------------------------------------------
+
+        if mouse_hex_on_map:
+
+            (
+                terrain_name,
+                terrain_cost,
+            ) = terrain_name_and_cost(
+                mouse_hex
+            )
+
+
+            mouse_hex_text = (
+                "MOUSE HEX: "
+                f"{mouse_hex}"
             )
 
 
         else:
 
-            distance_text = small_font.render(
-                (
-                    "PATH COST: "
-                    f"{mouse_hex_distance}"
-                ),
-                True,
-                cfg.SUBTEXT_COLOR,
+            terrain_name = (
+                "OUTSIDE"
+            )
+
+            terrain_cost = None
+
+            mouse_hex_text = (
+                "MOUSE HEX: OUTSIDE"
             )
 
 
-    else:
+        # --------------------------------------------------
+        # PATH COST
+        # --------------------------------------------------
 
-        mouse_hex_text = small_font.render(
-            "MOUSE HEX: OUTSIDE",
-            True,
-            cfg.SUBTEXT_COLOR,
-        )
+        if not mouse_hex_on_map:
 
-
-        distance_text = small_font.render(
-            "PATH COST: -",
-            True,
-            cfg.SUBTEXT_COLOR,
-        )
+            path_text = (
+                "PATH COST: -"
+            )
 
 
-    if mouse_hex_blocked:
+        elif (
+            mouse_hex
+            in map_state.wall_hexes
+        ):
 
-        valid_text = small_font.render(
-            "DESTINATION: WALL",
-            True,
-            cfg.HOVER_INVALID_OUTLINE,
-        )
+            path_text = (
+                "PATH COST: BLOCKED"
+            )
 
 
-    else:
+        elif mouse_path_cost is None:
 
-        valid_text = small_font.render(
+            path_text = (
+                "PATH COST: UNREACHABLE"
+            )
+
+
+        else:
+
+            path_text = (
+                "PATH COST: "
+                f"{mouse_path_cost}"
+            )
+
+
+        # --------------------------------------------------
+        # TERRAIN DISPLAY
+        # --------------------------------------------------
+
+        if terrain_cost is None:
+
+            terrain_text = (
+                "TERRAIN: "
+                f"{terrain_name}"
+            )
+
+
+        else:
+
+            terrain_text = (
+                "TERRAIN: "
+                f"{terrain_name} "
+                f"({terrain_cost})"
+            )
+
+
+        # --------------------------------------------------
+        # DEBUG LINES
+        # --------------------------------------------------
+
+        debug_lines = (
+            "DEVELOPMENT BUILD",
+
             (
-                "IN RANGE: "
-                f"{mouse_hex_in_range}"
+                "PLAYER HOVER: "
+                f"{player_is_hovered}"
             ),
-            True,
-            cfg.SUBTEXT_COLOR,
+
+            (
+                "SESSION MAX MOVE: "
+                f"{state.session_max_move_range}"
+            ),
+
+            (
+                "MOVE LEFT: "
+                f"{state.movement_remaining} "
+                f"/ {state.session_max_move_range}"
+            ),
+
+            (
+                "CURRENT BUDGET: "
+                f"{current_move_budget}"
+            ),
+
+            mouse_hex_text,
+
+            path_text,
+
+            terrain_text,
+
+            state.status_message,
         )
 
 
-    status_text = small_font.render(
-        state.status_message,
-        True,
-        cfg.SUBTEXT_COLOR,
-    )
-
-
-    # --------------------------------------------------
-    # DEV CONTROL TEXT
-    # --------------------------------------------------
-
-    dev_controls_text = small_font.render(
-        "DEV CONTROLS",
-        True,
-        cfg.TEXT_COLOR,
-    )
-
-
-    energy_label_text = small_font.render(
-        "SET ENERGY",
-        True,
-        cfg.TEXT_COLOR,
-    )
-
-
-    move_label_text = small_font.render(
-        "SET MOVE",
-        True,
-        cfg.TEXT_COLOR,
-    )
-
-
-    if state.dev_show_path_numbers:
-
-        path_number_button_label = (
-            "PATH NUMBERS: ON"
-        )
-
-    else:
-
-        path_number_button_label = (
-            "PATH NUMBERS: OFF"
-        )
-
-
-    # --------------------------------------------------
-    # DRAW HUD
-    # --------------------------------------------------
-
-    screen.blit(
-        title_text,
-        (
-            panel_x + 24,
-            32,
-        ),
-    )
-
-
-    screen.blit(
-        hp_text,
-        (
-            panel_x + 24,
-            80,
-        ),
-    )
-
-
-    screen.blit(
-        energy_text,
-        (
-            panel_x + 24,
-            115,
-        ),
-    )
-
-
-    screen.blit(
-        position_text,
-        (
-            panel_x + 24,
-            150,
-        ),
-    )
-
-
-    screen.blit(
-        turn_text,
-        (
-            panel_x + 24,
-            185,
-        ),
-    )
-
-
-    # --------------------------------------------------
-    # DRAW GAMEPLAY CONTROL
-    # --------------------------------------------------
-
-    draw_button(
-        screen,
-        end_turn_rect,
-        "END TURN",
-        small_font,
-        mouse_position,
-    )
-
-
-    # --------------------------------------------------
-    # DRAW DEBUG INFORMATION
-    # --------------------------------------------------
-
-    screen.blit(
-        debug_title,
-        (
-            panel_x + 24,
+        debug_y_positions = (
             255,
-        ),
-    )
-
-
-    screen.blit(
-        hover_text,
-        (
-            panel_x + 24,
             282,
-        ),
-    )
-
-
-    screen.blit(
-        range_text,
-        (
-            panel_x + 24,
             310,
-        ),
-    )
-
-
-    screen.blit(
-        movement_left_text,
-        (
-            panel_x + 24,
             338,
-        ),
-    )
-
-
-    screen.blit(
-        current_range_text,
-        (
-            panel_x + 24,
             366,
-        ),
-    )
-
-
-    screen.blit(
-        mouse_hex_text,
-        (
-            panel_x + 24,
             404,
-        ),
-    )
-
-
-    screen.blit(
-        distance_text,
-        (
-            panel_x + 24,
             432,
-        ),
-    )
-
-
-    screen.blit(
-        valid_text,
-        (
-            panel_x + 24,
             460,
-        ),
-    )
+            482,
+        )
 
 
-    screen.blit(
-        status_text,
-        (
-            panel_x + 24,
-            488,
-        ),
-    )
+        for (
+            line,
+            y_position,
+        ) in zip(
+            debug_lines,
+            debug_y_positions,
+        ):
+
+            if "BLOCKED" in line:
+
+                text_colour = (
+                    cfg.HOVER_INVALID_OUTLINE
+                )
+
+            else:
+
+                text_colour = (
+                    cfg.SUBTEXT_COLOR
+                )
 
 
-    # --------------------------------------------------
-    # DRAW DEV CONTROLS
-    # --------------------------------------------------
-
-    screen.blit(
-        dev_controls_text,
-        (
-            panel_x + 20,
-            505,
-        ),
-    )
+            line_surface = (
+                small_font.render(
+                    line,
+                    True,
+                    text_colour,
+                )
+            )
 
 
-    draw_button(
-        screen,
-        reset_turn_rect,
-        "RESET TURN",
-        small_font,
-        mouse_position,
-    )
+            screen.blit(
+                line_surface,
+                (
+                    panel_x + 24,
+                    y_position,
+                ),
+            )
 
 
-    draw_button(
-        screen,
-        reset_player_rect,
-        "RESET PLAYER",
-        small_font,
-        mouse_position,
-    )
+        # --------------------------------------------------
+        # DEV CONTROLS
+        # --------------------------------------------------
+
+        dev_title = (
+            small_font.render(
+                "DEV CONTROLS",
+                True,
+                cfg.TEXT_COLOR,
+            )
+        )
 
 
-    screen.blit(
-        energy_label_text,
-        (
-            panel_x + 20,
-            582,
-        ),
-    )
+        screen.blit(
+            dev_title,
+            (
+                panel_x + 20,
+                505,
+            ),
+        )
 
 
-    draw_input_box(
-        screen,
-        energy_input_rect,
-        energy_input_text,
-        active_input == "energy",
-        small_font,
-    )
+        draw_button(
+            screen,
+            reset_turn_rect,
+            "RESET TURN",
+            tiny_font,
+            mouse_position,
+        )
 
 
-    screen.blit(
-        move_label_text,
-        (
-            panel_x + 20,
-            652,
-        ),
-    )
+        draw_button(
+            screen,
+            reset_player_rect,
+            "RESET PLAYER",
+            tiny_font,
+            mouse_position,
+        )
 
 
-    draw_input_box(
-        screen,
-        move_input_rect,
-        move_input_text,
-        active_input == "move",
-        small_font,
-    )
+        # --------------------------------------------------
+        # ENERGY
+        # --------------------------------------------------
+
+        energy_label = (
+            tiny_font.render(
+                "SET ENERGY",
+                True,
+                cfg.TEXT_COLOR,
+            )
+        )
 
 
-    draw_button(
-        screen,
-        path_numbers_rect,
-        path_number_button_label,
-        small_font,
-        mouse_position,
-    )
+        screen.blit(
+            energy_label,
+            (
+                panel_x + 20,
+                562,
+            ),
+        )
+
+
+        draw_input_box(
+            screen,
+            energy_input_rect,
+            energy_input_text,
+            active_input == "energy",
+            tiny_font,
+        )
+
+
+        # --------------------------------------------------
+        # MOVE
+        # --------------------------------------------------
+
+        move_label = (
+            tiny_font.render(
+                "SET MOVE",
+                True,
+                cfg.TEXT_COLOR,
+            )
+        )
+
+
+        screen.blit(
+            move_label,
+            (
+                panel_x + 20,
+                619,
+            ),
+        )
+
+
+        draw_input_box(
+            screen,
+            move_input_rect,
+            move_input_text,
+            active_input == "move",
+            tiny_font,
+        )
+
+
+        # --------------------------------------------------
+        # MOVE SPEED
+        # --------------------------------------------------
+
+        speed_label = (
+            tiny_font.render(
+                (
+                    "SET MOVE SPEED "
+                    f"({state.session_move_step_ms} ms)"
+                ),
+                True,
+                cfg.TEXT_COLOR,
+            )
+        )
+
+
+        screen.blit(
+            speed_label,
+            (
+                panel_x + 20,
+                676,
+            ),
+        )
+
+
+        draw_input_box(
+            screen,
+            move_speed_input_rect,
+            move_speed_input_text,
+            active_input == "move_speed",
+            tiny_font,
+        )
+
+
+        # --------------------------------------------------
+        # PATH NUMBERS + MAP EDITOR
+        # --------------------------------------------------
+
+        if state.dev_show_path_numbers:
+
+            path_label = (
+                "PATH #: ON"
+            )
+
+        else:
+
+            path_label = (
+                "PATH #: OFF"
+            )
+
+
+        draw_button(
+            screen,
+            path_numbers_rect,
+            path_label,
+            tiny_font,
+            mouse_position,
+        )
+
+
+        draw_button(
+            screen,
+            map_editor_rect,
+            "MAP EDITOR",
+            tiny_font,
+            mouse_position,
+        )
 
 
     # --------------------------------------------------

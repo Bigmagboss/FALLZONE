@@ -3,7 +3,9 @@ import settings as cfg
 
 class GameState:
 
-    def __init__(self):
+    def __init__(
+        self,
+    ):
 
         # --------------------------------------------------
         # SESSION SETTINGS
@@ -15,6 +17,14 @@ class GameState:
 
         self.session_max_move_range = (
             cfg.MAX_MOVE_RANGE
+        )
+
+        self.session_move_step_ms = (
+            cfg.MOVE_STEP_MS
+        )
+
+        self.session_player_start = (
+            cfg.PLAYER_START
         )
 
 
@@ -35,7 +45,7 @@ class GameState:
 
 
         # --------------------------------------------------
-        # INITIAL PLAYER STATE
+        # INITIAL PLAYER
         # --------------------------------------------------
 
         self.reset_player()
@@ -46,7 +56,9 @@ class GameState:
     # --------------------------------------------------
 
     @property
-    def player_position(self):
+    def player_position(
+        self,
+    ):
 
         return (
             self.player_q,
@@ -55,7 +67,7 @@ class GameState:
 
 
     # --------------------------------------------------
-    # CHECK WHETHER MOVEMENT CAN BE PAID FOR
+    # CHECK MOVEMENT COST
     # --------------------------------------------------
 
     def can_move(
@@ -68,33 +80,25 @@ class GameState:
             return False
 
 
-        enough_movement = (
-            movement_cost
-            <= self.movement_remaining
-        )
-
-
         energy_cost = (
             movement_cost
             * cfg.MOVE_ENERGY_COST_PER_HEX
         )
 
 
-        enough_energy = (
+        return (
+            movement_cost
+            <= self.movement_remaining
+
+            and
+
             energy_cost
             <= self.player_energy
         )
 
 
-        return (
-            enough_movement
-            and
-            enough_energy
-        )
-
-
     # --------------------------------------------------
-    # MOVE PLAYER
+    # MOVE ONE ANIMATED STEP
     # --------------------------------------------------
 
     def move_player_to(
@@ -132,7 +136,8 @@ class GameState:
 
 
         self.status_message = (
-            f"Moved {movement_cost} hex(es)."
+            f"Entered {destination}; "
+            f"cost {movement_cost}."
         )
 
 
@@ -140,10 +145,40 @@ class GameState:
 
 
     # --------------------------------------------------
-    # END GAMEPLAY TURN
+    # START NEW GAME FROM CURRENT EDITED MAP
     # --------------------------------------------------
 
-    def end_turn(self):
+    def start_new_game_session(
+        self,
+        player_start,
+    ):
+
+        self.session_player_start = (
+            tuple(
+                player_start
+            )
+        )
+
+
+        self.turn_number = 1
+
+
+        self.reset_player()
+
+
+        self.status_message = (
+            "Game session started "
+            "from edited map."
+        )
+
+
+    # --------------------------------------------------
+    # END TURN
+    # --------------------------------------------------
+
+    def end_turn(
+        self,
+    ):
 
         self.turn_number += 1
 
@@ -153,18 +188,18 @@ class GameState:
         )
 
 
-        # Energy deliberately remains unchanged.
-
         self.status_message = (
             f"Turn {self.turn_number} started."
         )
 
 
     # --------------------------------------------------
-    # RESET MOVEMENT ONLY - DEV TOOL
+    # RESET TURN - DEV
     # --------------------------------------------------
 
-    def reset_turn(self):
+    def reset_turn(
+        self,
+    ):
 
         self.movement_remaining = (
             self.session_max_move_range
@@ -177,14 +212,17 @@ class GameState:
 
 
     # --------------------------------------------------
-    # RESET PLAYER - DEV TOOL
+    # RESET PLAYER - DEV
     # --------------------------------------------------
 
-    def reset_player(self):
+    def reset_player(
+        self,
+    ):
 
-        self.player_q, self.player_r = (
-            cfg.PLAYER_START
-        )
+        (
+            self.player_q,
+            self.player_r,
+        ) = self.session_player_start
 
 
         self.player_hp = (
@@ -208,7 +246,7 @@ class GameState:
 
 
     # --------------------------------------------------
-    # DEVELOPER ENERGY OVERRIDE
+    # SET ENERGY
     # --------------------------------------------------
 
     def set_session_energy(
@@ -216,15 +254,12 @@ class GameState:
         value,
     ):
 
-        value = int(
-            value
-        )
-
-
         value = max(
             cfg.DEV_MIN_ENERGY,
             min(
-                value,
+                int(
+                    value
+                ),
                 cfg.DEV_MAX_ENERGY,
             ),
         )
@@ -233,7 +268,6 @@ class GameState:
         self.session_max_energy = (
             value
         )
-
 
         self.player_energy = (
             value
@@ -249,7 +283,7 @@ class GameState:
 
 
     # --------------------------------------------------
-    # DEVELOPER MOVEMENT OVERRIDE
+    # SET MOVEMENT
     # --------------------------------------------------
 
     def set_session_move_range(
@@ -257,15 +291,12 @@ class GameState:
         value,
     ):
 
-        value = int(
-            value
-        )
-
-
         value = max(
             cfg.DEV_MIN_MOVE_RANGE,
             min(
-                value,
+                int(
+                    value
+                ),
                 cfg.DEV_MAX_MOVE_RANGE,
             ),
         )
@@ -274,7 +305,6 @@ class GameState:
         self.session_max_move_range = (
             value
         )
-
 
         self.movement_remaining = (
             value
@@ -290,10 +320,46 @@ class GameState:
 
 
     # --------------------------------------------------
-    # TOGGLE PATH STEP NUMBERS - DEV TOOL
+    # SET MOVEMENT ANIMATION SPEED
     # --------------------------------------------------
 
-    def toggle_path_numbers(self):
+    def set_session_move_step_ms(
+        self,
+        value,
+    ):
+
+        value = max(
+            cfg.DEV_MIN_MOVE_STEP_MS,
+            min(
+                int(
+                    value
+                ),
+                cfg.DEV_MAX_MOVE_STEP_MS,
+            ),
+        )
+
+
+        self.session_move_step_ms = (
+            value
+        )
+
+
+        self.status_message = (
+            "Movement speed set to "
+            f"{value} ms."
+        )
+
+
+        return value
+
+
+    # --------------------------------------------------
+    # TOGGLE PATH NUMBERS
+    # --------------------------------------------------
+
+    def toggle_path_numbers(
+        self,
+    ):
 
         self.dev_show_path_numbers = (
             not self.dev_show_path_numbers
@@ -310,5 +376,6 @@ class GameState:
 
 
         self.status_message = (
-            f"DEV: path numbers {state_text}."
+            "DEV: path numbers "
+            f"{state_text}."
         )

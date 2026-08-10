@@ -1,3 +1,4 @@
+import heapq
 import math
 
 from collections import deque
@@ -421,6 +422,154 @@ def get_reachable_hex_distances(
     )
 
     return distances
+
+
+# --------------------------------------------------
+# WEIGHTED DIJKSTRA REACHABILITY
+# --------------------------------------------------
+
+def get_weighted_reachable_hex_data(
+    start,
+    max_cost,
+    blocked_hexes,
+    terrain_costs,
+):
+
+    # Total movement cost required to reach
+    # every discovered hex.
+
+    costs = {
+        start: 0
+    }
+
+
+    # Used later to reconstruct the chosen
+    # cheapest path.
+
+    came_from = {
+        start: None
+    }
+
+
+    # Priority queue.
+    #
+    # Lower-cost positions are explored first.
+
+    frontier = [
+        (
+            0,
+            start,
+        )
+    ]
+
+
+    while frontier:
+
+        current_cost, current = (
+            heapq.heappop(
+                frontier
+            )
+        )
+
+
+        # Ignore an outdated queue entry if a cheaper
+        # route to this same hex has already been found.
+
+        if (
+            current_cost
+            != costs.get(
+                current
+            )
+        ):
+            continue
+
+
+        if current_cost > max_cost:
+            continue
+
+
+        for neighbor in get_neighbors(
+            current
+        ):
+
+            # --------------------------------------------------
+            # WALL / BLOCKED HEX
+            # --------------------------------------------------
+
+            if neighbor in blocked_hexes:
+                continue
+
+
+            # --------------------------------------------------
+            # OUTSIDE MAP
+            # --------------------------------------------------
+
+            if not is_hex_on_map(
+                neighbor
+            ):
+                continue
+
+
+            # --------------------------------------------------
+            # TERRAIN MOVEMENT COST
+            # --------------------------------------------------
+
+            step_cost = terrain_costs.get(
+                neighbor,
+                1,
+            )
+
+
+            new_cost = (
+                current_cost
+                + step_cost
+            )
+
+
+            # Destination would exceed the available
+            # movement budget.
+
+            if new_cost > max_cost:
+                continue
+
+
+            # --------------------------------------------------
+            # FIRST ROUTE OR CHEAPER ROUTE
+            # --------------------------------------------------
+
+            if (
+                neighbor not in costs
+                or
+                new_cost
+                < costs[
+                    neighbor
+                ]
+            ):
+
+                costs[
+                    neighbor
+                ] = new_cost
+
+
+                came_from[
+                    neighbor
+                ] = current
+
+
+                heapq.heappush(
+                    frontier,
+                    (
+                        new_cost,
+                        neighbor,
+                    ),
+                )
+
+
+    return (
+        costs,
+        came_from,
+    )
+
 
 
 # --------------------------------------------------
