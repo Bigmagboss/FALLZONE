@@ -215,26 +215,180 @@ def terrain_name_and_cost(hex_position):
     return names[terrain]
 
 
-def draw_entity_marker(surface, entity, editor=False):
-    definition = entity.definition
-    anchor_x, anchor_y = axial_to_pixel(entity.position)
+def draw_actor(surface, position, fill, outline):
+    anchor_x, anchor_y = axial_to_pixel(position)
     anchor_x = int(anchor_x)
     anchor_y = int(anchor_y)
 
+    half_body = cfg.ACTOR_BODY_WIDTH // 2
+    body_bottom = anchor_y - cfg.ACTOR_BODY_BOTTOM_OFFSET_Y
+    body_top = body_bottom - cfg.ACTOR_BODY_HEIGHT
+    head_y = anchor_y - cfg.ACTOR_HEAD_OFFSET_Y
+
+    pygame.draw.circle(
+        surface,
+        cfg.ENTITY_ANCHOR,
+        (anchor_x, anchor_y),
+        cfg.ACTOR_ANCHOR_RADIUS,
+    )
+
+    pygame.draw.line(
+        surface,
+        outline,
+        (
+            anchor_x - cfg.ACTOR_LEG_OFFSET_X,
+            anchor_y - 2,
+        ),
+        (
+            anchor_x - 3,
+            body_bottom,
+        ),
+        2,
+    )
+
+    pygame.draw.line(
+        surface,
+        outline,
+        (
+            anchor_x + cfg.ACTOR_LEG_OFFSET_X,
+            anchor_y - 2,
+        ),
+        (
+            anchor_x + 3,
+            body_bottom,
+        ),
+        2,
+    )
+
+    body_rect = pygame.Rect(
+        anchor_x - half_body,
+        body_top,
+        cfg.ACTOR_BODY_WIDTH,
+        cfg.ACTOR_BODY_HEIGHT,
+    )
+
+    pygame.draw.rect(
+        surface,
+        fill,
+        body_rect,
+        border_radius=3,
+    )
+
+    pygame.draw.rect(
+        surface,
+        outline,
+        body_rect,
+        2,
+        border_radius=3,
+    )
+
+    pygame.draw.circle(
+        surface,
+        fill,
+        (
+            anchor_x,
+            head_y,
+        ),
+        cfg.ACTOR_HEAD_RADIUS,
+    )
+
+    pygame.draw.circle(
+        surface,
+        outline,
+        (
+            anchor_x,
+            head_y,
+        ),
+        cfg.ACTOR_HEAD_RADIUS,
+        2,
+    )
+
+
+def draw_entity_marker(
+    surface,
+    entity,
+    editor=False,
+):
+
+    definition = (
+        entity.definition
+    )
+
+    anchor_x, anchor_y = (
+        axial_to_pixel(
+            entity.position
+        )
+    )
+
+    anchor_x = int(
+        anchor_x
+    )
+
+    anchor_y = int(
+        anchor_y
+    )
+
     if editor:
-        pygame.draw.circle(surface, definition.fill, (anchor_x, anchor_y), 9)
-        pygame.draw.circle(surface, definition.outline, (anchor_x, anchor_y), 9, 2)
-        label = tiny_font.render(definition.short_label, True, cfg.ENEMY_LABEL)
-        surface.blit(label, label.get_rect(center=(anchor_x, anchor_y)))
+
+        pygame.draw.circle(
+            surface,
+            definition.fill,
+            (
+                anchor_x,
+                anchor_y,
+            ),
+            9,
+        )
+
+        pygame.draw.circle(
+            surface,
+            definition.outline,
+            (
+                anchor_x,
+                anchor_y,
+            ),
+            9,
+            2,
+        )
+
+        label = tiny_font.render(
+            definition.short_label,
+            True,
+            cfg.ENEMY_LABEL,
+        )
+
+        surface.blit(
+            label,
+            label.get_rect(
+                center=(
+                    anchor_x,
+                    anchor_y,
+                )
+            ),
+        )
+
         return
 
-    pygame.draw.circle(surface, cfg.ENTITY_ANCHOR, (anchor_x, anchor_y), 3)
-    pygame.draw.line(surface, definition.outline, (anchor_x - 4, anchor_y - 2), (anchor_x - 3, anchor_y - 11), 2)
-    pygame.draw.line(surface, definition.outline, (anchor_x + 4, anchor_y - 2), (anchor_x + 3, anchor_y - 11), 2)
-    pygame.draw.rect(surface, definition.fill, pygame.Rect(anchor_x - 6, anchor_y - 24, 12, 14), border_radius=3)
-    pygame.draw.rect(surface, definition.outline, pygame.Rect(anchor_x - 6, anchor_y - 24, 12, 14), 2, border_radius=3)
-    pygame.draw.circle(surface, definition.fill, (anchor_x, anchor_y - 30), 5)
-    pygame.draw.circle(surface, definition.outline, (anchor_x, anchor_y - 30), 5, 2)
+    draw_actor(
+        surface,
+        entity.position,
+        definition.fill,
+        definition.outline,
+    )
+
+
+def actor_sort_key(
+    position,
+):
+
+    x, y = axial_to_pixel(
+        position
+    )
+
+    return (
+        y,
+        x,
+    )
 
 
 def draw_map_terrain():
@@ -746,9 +900,41 @@ while running:
         for entity in sorted(session_entities, key=lambda item: axial_to_pixel(item.position)[1]):
             draw_entity_marker(screen, entity)
 
-        player_points = hex_corners(player_center, cfg.HEX_SIZE * 0.55)
-        pygame.draw.polygon(screen, cfg.PLAYER_FILL, player_points)
-        pygame.draw.polygon(screen, cfg.PLAYER_OUTLINE, player_points, 2)
+        actors_to_draw = [
+            (
+                state.player_position,
+                cfg.PLAYER_FILL,
+                cfg.PLAYER_OUTLINE,
+            )
+        ]
+
+        actors_to_draw.extend(
+            (
+                entity.position,
+                entity.definition.fill,
+                entity.definition.outline,
+            )
+            for entity in session_entities
+        )
+
+        for (
+            position,
+            fill,
+            outline,
+        ) in sorted(
+            actors_to_draw,
+            key=lambda actor:
+            actor_sort_key(
+                actor[0]
+            ),
+        ):
+
+            draw_actor(
+                screen,
+                position,
+                fill,
+                outline,
+            )
 
     else:
         pygame.draw.rect(
